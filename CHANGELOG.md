@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Show a small blinking red microphone in the compact panel's Codex wing while
+  listening, safely outside the camera cutout. Preparation and transcription use
+  orange indicators; idle restores the usage ring without resizing the panel.
+- Respect Reduce Motion with a steady recording indicator.
+
 ## 0.2.0
 
 - Fix stale `@Published` reads causing clipped expansion, delayed resizing and

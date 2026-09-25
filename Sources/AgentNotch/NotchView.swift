@@ -29,7 +29,7 @@ struct NotchView: View {
 
     private var compactBar: some View {
         HStack(spacing: 0) {
-            CompactUsageChip(title: "Codex", color: .mint, snapshot: model.codexUsage)
+            CompactUsageChip(title: "Codex", color: .mint, snapshot: model.codexUsage, speechState: model.speechState)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Color.clear
@@ -47,8 +47,7 @@ struct NotchView: View {
         VStack(spacing: 11) {
             Divider().overlay(.white.opacity(0.12))
             HStack(spacing: 7) {
-                Image(systemName: speechIcon)
-                    .symbolEffect(.pulse, isActive: model.speechState == .listening)
+                SpeechActivityIndicator(state: model.speechState)
                 Text(model.speechState.shortLabel)
                 Spacer()
                 Text("Space · 280 ms")
@@ -190,12 +189,51 @@ struct NotchView: View {
         model.localeOptions.first(where: { $0.id == model.selectedLocale })?.name ?? model.selectedLocale
     }
 
-    private var speechIcon: String {
-        switch model.speechState {
-        case .listening: return "waveform"
-        case .preparing, .transcribing: return "ellipsis"
+}
+
+/// Lives in the left wing, outside the physical camera exclusion area.
+/// Reuses the usage ring's footprint so starting dictation never resizes the panel.
+private struct SpeechActivityIndicator: View {
+    let state: SpeechState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Group {
+            if state == .listening && !reduceMotion {
+                TimelineView(.periodic(from: .distantPast, by: 0.55)) { context in
+                    icon.opacity(Int(context.date.timeIntervalSince1970 / 0.55) % 2 == 0 ? 1 : 0.3)
+                }
+            } else {
+                icon
+            }
+        }
+        .frame(width: 18, height: 18)
+        .help(state.shortLabel)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(state.shortLabel)
+    }
+
+    private var icon: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(color)
+            .frame(width: 18, height: 18)
+    }
+
+    private var symbol: String {
+        switch state {
+        case .idle, .listening: return "mic.fill"
+        case .preparing: return "hourglass"
+        case .transcribing: return "ellipsis"
         case .failed: return "exclamationmark.triangle.fill"
-        case .idle: return "mic.fill"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .listening: return .red
+        case .preparing, .transcribing, .failed: return .orange
+        case .idle: return .white
         }
     }
 }
@@ -204,15 +242,20 @@ private struct CompactUsageChip: View {
     let title: String
     let color: Color
     let snapshot: UsageSnapshot?
+    var speechState: SpeechState = .idle
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
+            if speechState != .idle {
+                SpeechActivityIndicator(state: speechState)
+            } else {
+                Circle()
                 .trim(from: 0, to: progress)
                 .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .background(Circle().stroke(.white.opacity(0.16), lineWidth: 3))
                 .frame(width: 18, height: 18)
+            }
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
