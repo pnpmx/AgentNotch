@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>es</string>
+    <key>CFBundleExecutable</key>
+    <string>AgentNotch</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.agentnotch.mac</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Agent Notch</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+	<string>0.1.1</string>
+    <key>CFBundleVersion</key>
+	<string>2</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Agent Notch usa el micrófono para transcribir tu voz localmente.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Agent Notch usa SpeechAnalyzer para convertir tu voz en texto en el dispositivo.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 AgentNotch contributors. MIT License.</string>
+</dict>
+</plist>

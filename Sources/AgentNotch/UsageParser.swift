@@ -1,0 +1,115 @@
+import Foundation
+
+enum UsageParser {
+    static func parseCodexResponse(_ object: Any, now: Date = Date()) throws -> UsageSnapshot {
+        guard
+            let root = object as? [String: Any],
+            let result = root["result"] as? [String: Any]
+        else {
+            throw UsageParseError.malformedPayload
+        }
+
+        let plan = (result["rateLimits"] as? [String: Any])?["planType"] as? String
+        var windows: [UsageWindow] = []
+
+        if let buckets = result["rateLimitsByLimitId"] as? [String: Any] {
+            let sortedKeys = buckets.keys.sorted { lhs, rhs in
+                if lhs == "codex" { return true }
+                if rhs == "codex" { return false }
+                return lhs < rhs
+            }
+            for key in sortedKeys {
+                guard let bucket = buckets[key] as? [String: Any] else { continue }
+                windows.append(contentsOf: parseCodexBucket(bucket, fallbackName: key))
+            }
+        } else if let bucket = result["rateLimits"] as? [String: Any] {
+            windows = parseCodexBucket(bucket, fallbackName: "Codex")
+        }
+
+        guard !windows.isEmpty else { throw UsageParseError.missingRateLimits }
+        return UsageSnapshot(source: .codex, windows: windows, fetchedAt: now, plan: plan)
+    }
+
+    static func parseClaudeStatusLine(_ object: Any, now: Date = Date()) throws -> UsageSnapshot {
+        guard let root = object as? [String: Any] else {
+            throw UsageParseError.malformedPayload
+        }
+        guard let limits = root["rate_limits"] as? [String: Any] else {
+            throw UsageParseError.missingRateLimits
+        }
+
+        let definitions: [(String, String)] = [
+            ("five_hour", "5 horas"),
+            ("seven_day", "7 días"),
+            ("spend_limit", "Gasto")
+        ]
+        let windows = definitions.compactMap { key, label -> UsageWindow? in
+            guard let value = limits[key] as? [String: Any], let used = number(value["used_percentage"]) else {
+                return nil
+            }
+            return UsageWindow(
+                id: "claude-\(key)",
+                label: label,
+                usedPercent: used,
+                resetsAt: epochDate(value["resets_at"]),
+                durationMinutes: nil
+            )
+        }
+
+        guard !windows.isEmpty else { throw UsageParseError.missingRateLimits }
+        return UsageSnapshot(source: .claude, windows: windows, fetchedAt: now, plan: nil)
+    }
+
+    private static func parseCodexBucket(_ bucket: [String: Any], fallbackName: String) -> [UsageWindow] {
+        let name = (bucket["limitName"] as? String) ?? (bucket["limitId"] as? String) ?? fallbackName
+        let entries = ["primary", "secondary"]
+        return entries.compactMap { key in
+            guard let value = bucket[key] as? [String: Any], let used = number(value["usedPercent"]) else {
+                return nil
+            }
+            let minutes = number(value["windowDurationMins"]).map(Int.init)
+            let label: String
+            switch minutes {
+            case 300: label = "5 horas"
+            case 10_080: label = "7 días"
+            default: label = key == "secondary" ? "\(name) semanal" : name
+            }
+            return UsageWindow(
+                id: "codex-\(name)-\(key)",
+                label: label,
+                usedPercent: used,
+                resetsAt: epochDate(value["resetsAt"]),
+                durationMinutes: minutes
+            )
+        }
+    }
+
+    private static func number(_ value: Any?) -> Double? {
+        if let value = value as? NSNumber { return value.doubleValue }
+        if let value = value as? Double { return value }
+        if let value = value as? Int { return Double(value) }
+        return nil
+    }
+
+    private static func epochDate(_ value: Any?) -> Date? {
+        number(value).map(Date.init(timeIntervalSince1970:))
+    }
+}
+
+enum UsageFormatting {
+    static func percent(_ value: Double) -> String {
+        "\(Int(value.rounded()))%"
+    }
+
+    static func resetDescription(_ date: Date?, now: Date = Date()) -> String {
+        guard let date else { return "reset desconocido" }
+        let seconds = max(0, Int(date.timeIntervalSince(now)))
+        if seconds < 60 { return "reset <1 min" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "reset \(minutes) min" }
+        let hours = minutes / 60
+        let remainder = minutes % 60
+        if hours < 24 { return remainder == 0 ? "reset \(hours) h" : "reset \(hours) h \(remainder) min" }
+        return "reset \(hours / 24) d \(hours % 24) h"
+    }
+}
