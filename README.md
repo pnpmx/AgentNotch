@@ -1,5 +1,8 @@
 # AgentNotch
 
+[![CI](https://github.com/pnpmx/AgentNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pnpmx/AgentNotch/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Experimental native macOS notch panel for Codex and Claude usage, with local
 push-to-talk dictation using Apple's SpeechAnalyzer.
 
@@ -8,6 +11,10 @@ push-to-talk dictation using Apple's SpeechAnalyzer.
 lifecycle, voice recovery, audio conversion, clipboard restoration and request
 cancellation. Physical microphone dictation and OS permission approval still
 require an installed-app check on each machine.
+
+The maintainer has confirmed dictation and the blinking recording indicator on
+a MacBook Air M2. This is a personal verification, not a compatibility guarantee
+for other hardware or accounts. The current application interface is in Spanish.
 
 ## Requirements
 
@@ -28,6 +35,8 @@ retrieval may contact services through the authenticated CLI.
 From the repository root:
 
 ```sh
+git clone https://github.com/pnpmx/AgentNotch.git
+cd AgentNotch
 swift build -c release
 swift run -c release AgentNotch --self-test
 swift run -c release AgentNotch --regression-test
@@ -62,6 +71,10 @@ through; focus changes cancel dictation. The transcript remains available with
 a Copy button if the destination changes or pasting is unavailable. A synthetic
 paste request cannot confirm that the target application actually accepted it.
 
+A blinking red microphone beside Codex means recording is active, including
+when the panel is collapsed. Orange indicates preparation or transcription;
+the usage ring returns when idle. Reduce Motion uses a steady microphone.
+
 Expand the panel and use **Activar Space** for Accessibility and **Conceder
 permisos de voz** for microphone/speech permission. OS approval must be completed
 by the user. Permission checks run in the GUI process and retry while the app is
@@ -84,3 +97,17 @@ transcripts or private screenshots in issues or patches.
 
 Licensed under [MIT](LICENSE). This independent project is not affiliated with
 OpenAI, Anthropic or Apple. Product names identify external integrations.
+
+All application source, build scripts and tests are in this repository. Apple
+frameworks and downloaded speech models are proprietary platform dependencies;
+Codex and Claude are external services under their own terms. MIT applies to
+AgentNotch's code, not those dependencies. See [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Uninstall
+
+Disable **Abrir al iniciar sesión** in the menu, then quit AgentNotch and move
+`~/Applications/AgentNotch.app` to the Trash. If the Claude bridge was configured,
+remove only the AgentNotch `statusLine` entry from `~/.claude/settings.json` (or
+restore the relevant backup after reviewing later changes). Optional usage and
+diagnostic data lives in `~/Library/Application Support/AgentNotch` and can be
+moved to the Trash separately. Remove its permissions in System Settings if desired.

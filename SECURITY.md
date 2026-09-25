@@ -30,10 +30,14 @@ does not establish that microphone capture, permissions or pasting work safely.
 
 ## Reporting
 
-No hosted private reporting channel is configured yet. Once a repository host
-is selected, configure private vulnerability reporting there before requesting
-security reports. Do not put credentials, transcripts, clipboard contents or
-personal screenshots in public issues.
+Use [GitHub private vulnerability reporting](https://github.com/pnpmx/AgentNotch/security/advisories/new)
+for security defects. Do not put credentials, transcripts, clipboard contents or
+personal screenshots in public issues. If private reporting is temporarily
+unavailable, open an issue asking for a private contact without including
+exploit details or sensitive data. There is no guaranteed response-time SLA.
+
+Security fixes target the latest source on `main`; historical personal builds
+are not maintained separately.
 
 ## Release checks
 

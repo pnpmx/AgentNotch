@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a reproducible AgentNotch problem.
+body:
+  - type: markdown
+    attributes:
+      value: "For security issues, use private vulnerability reporting. Remove account details, transcripts and unrelated screen content before attaching anything."
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: AgentNotch version or commit, macOS version, Mac model, and display scale.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include expected behavior and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics
+      description: Use the app menu's Copiar diagnóstico. Review the output before posting; do not attach account configuration or raw logs.

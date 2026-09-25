@@ -2,6 +2,11 @@
 
 ## Remediation in 0.2.0
 
+Publication note: this document preserves observations made during the initial
+local audit. References below to no remote and an unperformed spoken-phrase test
+describe that moment. The maintainer subsequently confirmed dictation and the
+recording indicator in 0.2.1. No private audio or transcript is included here.
+
 The findings below describe the **pre-fix baseline**. This section records the
 subsequent changes; it does not erase the original evidence.
 
