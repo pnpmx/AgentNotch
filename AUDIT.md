@@ -25,6 +25,13 @@ No claim of end-to-end voice success is made before physical permission approval
 and a spoken-phrase test. Developer ID signing/notarization and a public remote
 are outside this personal build's current release configuration.
 
+Final installed-GUI verification (0.2.0): all eight layout checks passed; the
+collapsed panel measured 419 × 44 points. Accessibility trust, microphone
+authorization, speech authorization and event-tap availability all reported
+true in the actual GUI process on the final check. This supersedes the earlier
+missing-permission observation. A physical spoken-phrase/paste test remains
+unperformed; no audio or transcript was recorded by this audit.
+
 Scope: all application Swift files, scripts, package manifest, permissions,
 installation and existing tests. This is an audit of the current experimental
 implementation, not a declaration that the defects below are fixed.

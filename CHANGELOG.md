@@ -24,5 +24,6 @@
 Validation: release build with warnings as errors, portable regressions, parser
 tests and installed-GUI layout checks. Real microphone dictation, physical
 shortcut behavior and next-login launch still need user/device validation.
-The installed GUI reported OS permissions missing; approval cannot be supplied
-by the application or inferred from a separate terminal process.
+The final installed GUI confirmed Accessibility, microphone and speech permission
+plus an active event tap. OS approval cannot be supplied by the application or
+inferred from a separate terminal process.
