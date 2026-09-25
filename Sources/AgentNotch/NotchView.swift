@@ -15,16 +15,14 @@ struct NotchView: View {
             if model.isExpanded {
                 expandedContent
                     .layoutPriority(1)
-                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .padding(.horizontal, 12)
         .padding(.bottom, model.isExpanded ? 12 : 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(
             UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
-                .fill(.black.opacity(0.96))
-                .shadow(color: .black.opacity(0.42), radius: 16, y: 8)
+                .fill(.black)
         )
         .foregroundStyle(.white)
     }
@@ -35,14 +33,14 @@ struct NotchView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Color.clear
-                .frame(width: min(240, max(120, cameraGap)), height: 1)
+                .frame(width: cameraGap, height: 1)
 
             CompactUsageChip(title: "Claude", color: .orange, snapshot: model.claudeUsage)
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(height: cameraHeight)
         .contentShape(Rectangle())
-        .onTapGesture { withAnimation(.snappy(duration: 0.25)) { model.toggleExpanded() } }
+        .onTapGesture { model.toggleExpanded() }
     }
 
     private var expandedContent: some View {
@@ -56,7 +54,7 @@ struct NotchView: View {
                 Text("Space · 280 ms")
                     .foregroundStyle(.white.opacity(0.46))
                 Button {
-                    withAnimation(.snappy(duration: 0.2)) { model.toggleExpanded() }
+                    model.toggleExpanded()
                 } label: {
                     Image(systemName: "chevron.up")
                 }
@@ -106,6 +104,12 @@ struct NotchView: View {
                     Button("Activar Space") { model.requestAccessibility() }
                         .buttonStyle(.borderedProminent)
                 }
+                if case .failed = model.speechState {
+                    Button("Reintentar") { model.resetSpeechError() }
+                }
+                if !model.liveTranscript.isEmpty {
+                    Button("Copiar") { model.copyTranscript() }
+                }
                 if !model.claudeBridgeReady {
                     Button("Conectar Claude") { model.connectClaude() }
                         .buttonStyle(.bordered)
@@ -118,11 +122,21 @@ struct NotchView: View {
                 .buttonStyle(.borderless)
             }
 
+            if !model.voicePermissionsReady {
+                Button("Conceder permisos de voz") { model.requestVoicePermissions() }
+                    .buttonStyle(.bordered)
+            }
+            if !model.accessibilityReady {
+                Text(model.keyboardStatus)
+                    .font(.system(size: 10)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let notice = model.notice {
                 Text(notice)
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
+                    .lineLimit(3)
             }
         }
         .padding(.top, belowCameraClearance)
@@ -137,6 +151,9 @@ struct NotchView: View {
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
             if let snapshot {
+                Text(snapshot.ageLabel)
+                    .font(.system(size: 9))
+                    .foregroundStyle(snapshot.isStale ? .orange : .gray)
                 ForEach(snapshot.windows.prefix(2)) { window in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
@@ -161,6 +178,9 @@ struct NotchView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(3)
+            }
+            if snapshot != nil, let error {
+                Text(error).font(.system(size: 9)).foregroundStyle(.orange).lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -204,10 +224,12 @@ private struct CompactUsageChip: View {
     }
 
     private var progress: Double {
-        min(1, max(0.02, (snapshot?.primary?.usedPercent ?? 0) / 100))
+        guard let snapshot, !snapshot.isStale else { return 0 }
+        return min(1, max(0, (snapshot.primary?.usedPercent ?? 0) / 100))
     }
 
     private var value: String {
-        snapshot?.primary.map { UsageFormatting.percent($0.usedPercent) } ?? "--"
+        if snapshot?.isStale == true { return "antiguo" }
+        return snapshot?.primary.map { UsageFormatting.percent($0.usedPercent) } ?? "--"
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import Darwin
 
 enum LaunchAtLoginController {
     private static var fallbackURL: URL {
@@ -9,7 +10,12 @@ enum LaunchAtLoginController {
 
     static var isEnabled: Bool {
         SMAppService.mainApp.status == .enabled
-            || FileManager.default.fileExists(atPath: fallbackURL.path)
+            || (FileManager.default.fileExists(atPath: fallbackURL.path) && launchctl(["print", "gui/\(getuid())/dev.agentnotch.mac.autostart"]) == 0)
+    }
+
+    static var shouldEnableOnLaunch: Bool {
+        UserDefaults.standard.object(forKey: "launchAtLoginWanted") == nil
+            || UserDefaults.standard.bool(forKey: "launchAtLoginWanted")
     }
 
     static var requiresApproval: Bool {
@@ -17,6 +23,7 @@ enum LaunchAtLoginController {
     }
 
     static func enable() throws {
+        UserDefaults.standard.set(true, forKey: "launchAtLoginWanted")
         let service = SMAppService.mainApp
         switch service.status {
         case .enabled:
@@ -33,11 +40,13 @@ enum LaunchAtLoginController {
     }
 
     static func disable() throws {
+        UserDefaults.standard.set(false, forKey: "launchAtLoginWanted")
         let service = SMAppService.mainApp
-        if service.status == .enabled {
+        if service.status == .enabled || service.status == .requiresApproval {
             try service.unregister()
         }
         if FileManager.default.fileExists(atPath: fallbackURL.path) {
+            _ = launchctl(["bootout", "gui/\(getuid())/dev.agentnotch.mac.autostart"])
             try FileManager.default.removeItem(at: fallbackURL)
         }
     }
@@ -58,5 +67,19 @@ enum LaunchAtLoginController {
             options: 0
         )
         try data.write(to: fallbackURL, options: .atomic)
+        guard launchctl(["bootstrap", "gui/\(getuid())", fallbackURL.path]) == 0 || isEnabled else {
+            throw NSError(domain: "AgentNotch.Login", code: 1, userInfo: [NSLocalizedDescriptionKey: "No se pudo registrar el inicio automático."])
+        }
+    }
+
+    @discardableResult
+    private static func launchctl(_ arguments: [String]) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do { try process.run(); process.waitUntilExit(); return process.terminationStatus }
+        catch { return -1 }
     }
 }

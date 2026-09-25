@@ -28,7 +28,13 @@ enum ClaudeUsageProvider {
 
     private static func loadBridgeSnapshot() throws -> UsageSnapshot {
         let data = try Data(contentsOf: AppPaths.claudeSnapshot)
-        return try JSONDecoder().decode(UsageSnapshot.self, from: data)
+        var snapshot = try JSONDecoder().decode(UsageSnapshot.self, from: data)
+        guard !snapshot.windows.isEmpty,
+              snapshot.fetchedAt <= Date().addingTimeInterval(60),
+              snapshot.windows.allSatisfy({ $0.usedPercent.isFinite && (0...100).contains($0.usedPercent) })
+        else { throw UsageParseError.malformedPayload }
+        snapshot.origin = "Claude Code"
+        return snapshot
     }
 
     /// Claude Desktop keeps recent plan percentages locally. This is only a
@@ -56,7 +62,7 @@ enum ClaudeUsageProvider {
             return (Date(timeIntervalSince1970: milliseconds / 1_000), values)
         }.max(by: { $0.0 < $1.0 })
 
-        guard let latest, now.timeIntervalSince(latest.0) < 30 * 60 else {
+        guard let latest, now.timeIntervalSince(latest.0) >= -60, now.timeIntervalSince(latest.0) < 30 * 60 else {
             throw UsageParseError.missingRateLimits
         }
         let definitions: [(key: String, label: String, minutes: Int)] = [
@@ -77,7 +83,7 @@ enum ClaudeUsageProvider {
             )
         }
         guard !windows.isEmpty else { throw UsageParseError.missingRateLimits }
-        return UsageSnapshot(source: .claude, windows: windows, fetchedAt: latest.0, plan: nil)
+        return UsageSnapshot(source: .claude, windows: windows, fetchedAt: latest.0, plan: nil, origin: "Claude Desktop")
     }
 
     static func isBridgeConfigured() -> Bool {
@@ -85,7 +91,7 @@ enum ClaudeUsageProvider {
         guard let line = settings["statusLine"] as? [String: Any], let command = line["command"] as? String else {
             return false
         }
-        return command.contains("--claude-bridge")
+        return command == "\"\(Bundle.main.executableURL?.path ?? "")\" --claude-bridge"
     }
 
     static func installBridge() throws {
@@ -95,8 +101,9 @@ enum ClaudeUsageProvider {
         let settingsURL = claudeSettingsURL
         var settings = try readSettings()
         if let existing = settings["statusLine"] as? [String: Any], existing["command"] != nil {
-            if (existing["command"] as? String)?.contains("--claude-bridge") == true { return }
-            throw ClaudeBridgeError.existingStatusLine
+            if (existing["command"] as? String)?.contains("--claude-bridge") != true {
+                throw ClaudeBridgeError.existingStatusLine
+            }
         }
 
         if FileManager.default.fileExists(atPath: settingsURL.path) {

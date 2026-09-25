@@ -14,6 +14,7 @@ enum UsageParser {
 
         if let buckets = result["rateLimitsByLimitId"] as? [String: Any] {
             let sortedKeys = buckets.keys.sorted { lhs, rhs in
+                if lhs == rhs { return false }
                 if lhs == "codex" { return true }
                 if rhs == "codex" { return false }
                 return lhs < rhs
@@ -22,12 +23,13 @@ enum UsageParser {
                 guard let bucket = buckets[key] as? [String: Any] else { continue }
                 windows.append(contentsOf: parseCodexBucket(bucket, fallbackName: key))
             }
-        } else if let bucket = result["rateLimits"] as? [String: Any] {
+        }
+        if windows.isEmpty, let bucket = result["rateLimits"] as? [String: Any] {
             windows = parseCodexBucket(bucket, fallbackName: "Codex")
         }
 
         guard !windows.isEmpty else { throw UsageParseError.missingRateLimits }
-        return UsageSnapshot(source: .codex, windows: windows, fetchedAt: now, plan: plan)
+        return UsageSnapshot(source: .codex, windows: windows, fetchedAt: now, plan: plan, origin: "Codex CLI")
     }
 
     static func parseClaudeStatusLine(_ object: Any, now: Date = Date()) throws -> UsageSnapshot {
@@ -50,14 +52,14 @@ enum UsageParser {
             return UsageWindow(
                 id: "claude-\(key)",
                 label: label,
-                usedPercent: used,
+                usedPercent: min(100, max(0, used)),
                 resetsAt: epochDate(value["resets_at"]),
                 durationMinutes: nil
             )
         }
 
         guard !windows.isEmpty else { throw UsageParseError.missingRateLimits }
-        return UsageSnapshot(source: .claude, windows: windows, fetchedAt: now, plan: nil)
+        return UsageSnapshot(source: .claude, windows: windows, fetchedAt: now, plan: nil, origin: "Claude Code")
     }
 
     private static func parseCodexBucket(_ bucket: [String: Any], fallbackName: String) -> [UsageWindow] {
@@ -67,7 +69,7 @@ enum UsageParser {
             guard let value = bucket[key] as? [String: Any], let used = number(value["usedPercent"]) else {
                 return nil
             }
-            let minutes = number(value["windowDurationMins"]).map(Int.init)
+            let minutes = number(value["windowDurationMins"]).flatMap { $0 > 0 && $0 <= 5_256_000 ? Int($0) : nil }
             let label: String
             switch minutes {
             case 300: label = "5 horas"
@@ -77,7 +79,7 @@ enum UsageParser {
             return UsageWindow(
                 id: "codex-\(name)-\(key)",
                 label: label,
-                usedPercent: used,
+                usedPercent: min(100, max(0, used)),
                 resetsAt: epochDate(value["resetsAt"]),
                 durationMinutes: minutes
             )
@@ -85,24 +87,25 @@ enum UsageParser {
     }
 
     private static func number(_ value: Any?) -> Double? {
-        if let value = value as? NSNumber { return value.doubleValue }
-        if let value = value as? Double { return value }
-        if let value = value as? Int { return Double(value) }
-        return nil
+        guard let value = value as? NSNumber, value.doubleValue.isFinite else { return nil }
+        return value.doubleValue
     }
 
     private static func epochDate(_ value: Any?) -> Date? {
-        number(value).map(Date.init(timeIntervalSince1970:))
+        guard let seconds = number(value), seconds > 0, seconds <= 253_402_300_799 else { return nil }
+        return Date(timeIntervalSince1970: seconds)
     }
 }
 
 enum UsageFormatting {
     static func percent(_ value: Double) -> String {
-        "\(Int(value.rounded()))%"
+        guard value.isFinite else { return "--" }
+        return "\(Int(min(100, max(0, value)).rounded()))%"
     }
 
     static func resetDescription(_ date: Date?, now: Date = Date()) -> String {
         guard let date else { return "reset desconocido" }
+        if date <= now { return "reset vencido · actualizar" }
         let seconds = max(0, Int(date.timeIntervalSince(now)))
         if seconds < 60 { return "reset <1 min" }
         let minutes = seconds / 60

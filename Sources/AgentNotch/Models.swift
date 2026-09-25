@@ -22,8 +22,14 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
     let windows: [UsageWindow]
     let fetchedAt: Date
     let plan: String?
+    var origin: String? = nil
 
     var primary: UsageWindow? { windows.first }
+    var isStale: Bool { Date().timeIntervalSince(fetchedAt) > 300 || windows.contains { ($0.resetsAt ?? .distantFuture) < Date() } }
+    var ageLabel: String {
+        let minutes = max(0, Int(Date().timeIntervalSince(fetchedAt) / 60))
+        return "\(origin ?? source.rawValue) · hace \(minutes) min\(isStale ? " · desactualizado" : "")"
+    }
 }
 
 enum UsageParseError: LocalizedError {

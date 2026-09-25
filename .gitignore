@@ -28,3 +28,4 @@ claude-usage.json
 settings.json
 settings.*.json
 audit-private/
+diagnostics.json

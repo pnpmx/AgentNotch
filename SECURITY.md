@@ -12,7 +12,9 @@ does not establish that microphone capture, permissions or pasting work safely.
   tap receives global key events, although the application filters its behavior
   by frontmost application. Do not log raw keystrokes or transcript contents.
 - Dictation temporarily writes to the system clipboard and sends Command-V.
-  Current destination and clipboard preservation defects are listed in the audit.
+  Version 0.2 verifies the original process, targets that PID, preserves clipboard
+  representations and restores them only if no intervening copy occurred. It
+  cannot guarantee the target application accepts the synthetic paste request.
 - Codex usage starts a locally installed `codex app-server`, which uses the CLI's
   existing account session and may contact its service. This is not offline usage.
 - Claude usage reads a local status-line snapshot and optionally Claude Desktop's
@@ -22,6 +24,9 @@ does not establish that microphone capture, permissions or pasting work safely.
   These files, account settings, transcripts, screenshots and signing material
   must never be committed.
 - Personal builds are ad-hoc signed, not Developer ID signed or notarized.
+- Optional `--diagnostics` writes sanitized GUI-process state to the local
+  support directory. It excludes transcripts, clipboard data and account details.
+  The menu can copy the same diagnostic state on demand.
 
 ## Reporting
 

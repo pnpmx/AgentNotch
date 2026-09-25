@@ -3,9 +3,11 @@
 Experimental native macOS notch panel for Codex and Claude usage, with local
 push-to-talk dictation using Apple's SpeechAnalyzer.
 
-**Early prototype: known UI, keyboard, permissions and dictation defects remain.**
-Read [the full audit](AUDIT.md) before using it. This is not a stable release;
-passing parser tests does not mean dictation or window behavior works.
+**Experimental software.** Version 0.2 addresses the defects in the initial
+[audit](AUDIT.md). Behavioral regression tests cover window state, keyboard
+lifecycle, voice recovery, audio conversion, clipboard restoration and request
+cancellation. Physical microphone dictation and OS permission approval still
+require an installed-app check on each machine.
 
 ## Requirements
 
@@ -28,19 +30,18 @@ From the repository root:
 ```sh
 swift build -c release
 swift run -c release AgentNotch --self-test
+swift run -c release AgentNotch --regression-test
 ```
 
-Quit any existing AgentNotch instance before updating. To install a personal,
-ad-hoc signed build:
+To install and launch a personal, ad-hoc signed build:
 
 ```sh
 scripts/install-local.sh
-open "$HOME/Applications/AgentNotch.app"
 ```
 
 The installer stages its build under `.build`, installs one app in
-`~/Applications`, and moves any replaced installation to the Trash. It does not
-currently stop or restart a running process. Builds are not notarized.
+`~/Applications`, and moves any replaced installation to the Trash. It stops the matching executable before
+replacement and launches the new copy. Builds are not notarized.
 
 Optionally connect Claude Code:
 
@@ -49,24 +50,31 @@ scripts/configure-claude.sh
 ```
 
 This changes `~/.claude/settings.json`, saves a backup, and refuses to replace an
-unrelated existing status line. Usage is cached locally; stale-data handling is
-an open defect. Not every session or account necessarily supplies limits.
+unrelated existing status line. Cached usage shows its source, age and stale
+state, together with refresh errors. Not every account supplies every limit.
 
 ## Interaction and current limitations
 
 Click the top strip to expand usage details. Hold Space for 280 ms in a supported
 frontmost editor/terminal to start dictation, then release to transcribe and
-attempt to paste. The current implementation can interfere with shortcuts or
-lose release events after focus changes; test only in a disposable editor.
+attempt to paste into the original application. Modified Space shortcuts pass
+through; focus changes cancel dictation. The transcript remains available with
+a Copy button if the destination changes or pasting is unavailable. A synthetic
+paste request cannot confirm that the target application actually accepted it.
+
+Expand the panel and use **Activar Space** for Accessibility and **Conceder
+permisos de voz** for microphone/speech permission. OS approval must be completed
+by the user. Permission checks run in the GUI process and retry while the app is
+open. Use the menu's **Copiar diagnóstico** to inspect that process's state;
+running a separate CLI permission check is not equivalent.
 
 Languages are selected manually: Spanish, English, Italian, French, German and
 Portuguese. Automatic language detection and Whisper fallback are not implemented.
-Startup currently attempts to enable login launch automatically; persistence of
-the disable setting is also an open defect.
+Login launch defaults on for the first personal launch; disabling it from the
+menu is remembered on subsequent launches.
 
-The [audit](AUDIT.md) includes reproducible window-state ordering failures,
-permission-diagnostic limitations, audio cleanup risks, clipboard defects and
-the checks required before a stable release.
+The [audit](AUDIT.md) preserves the original findings and records their remediation
+status and the remaining manual checks. Whisper remains a future integration.
 
 ## Contributing, security and license
 

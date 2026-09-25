@@ -14,7 +14,8 @@ let package = Package(
         .executableTarget(
             name: "AgentNotch",
             path: "Sources/AgentNotch"
-        )
+        ),
+        .testTarget(name: "AgentNotchTests", dependencies: ["AgentNotch"])
     ],
     swiftLanguageModes: [.v5]
 )

@@ -1,5 +1,30 @@
 # AgentNotch audit — 2026-09-25
 
+## Remediation in 0.2.0
+
+The findings below describe the **pre-fix baseline**. This section records the
+subsequent changes; it does not erase the original evidence.
+
+| Findings | Implemented remediation | Verification |
+| --- | --- | --- |
+| A01, A07 | Post-update model delivery, intrinsic content measurement, actual cutout center/width, no sliding transition through the camera region | Repeated open/close and content grow/shrink regression scenarios; eight installed-GUI layout checks passed |
+| A02, A08 | Retry after start/finalization failure, cancellation of obsolete preparation, no automatic expansion during speech | Mocked speech failure/retry, finalization/retry and release-during-preparation tests |
+| A03 | Explicit press lifecycle, modifier bypass, pending-space flush before following character, focus/session cancellation and independent release handling | Pure lifecycle regressions; physical keyboard/shortcut validation still required with GUI Accessibility approval |
+| A04 | Persistent GUI permission/tap monitoring, distinct status messages, voice-permission setup button, sanitized diagnostics from the actual GUI | Installed GUI confirmed Accessibility, microphone and speech authorization were absent; prior terminal-only success was misleading. User approval remains required |
+| A05 | Native audio capture plus converter, cancellation checks, tap tracking independent of engine success, worker error propagation and cleanup on failures | Synthetic stereo 48 kHz → mono 16 kHz conversion and lifecycle mock tests; physical microphone/transcription remains a manual check |
+| A06 | Original PID validation and targeted paste, complete clipboard representations, change-count guarded restore, explicit Copy fallback and honest attempted-paste notice | Isolated pasteboard round-trip and intervening-copy tests; no input was injected into a real user document |
+| A09 | Source/age/stale labels; errors displayed alongside retained cache; cached bridge validation | Stale-data regression and parser checks |
+| A10 | Persistent login preference; loaded fallback service check and bootout on disable | Source review; actual next-login behavior remains a manual check |
+| A11 | Stop exact installed executable, refuse replacement if it does not stop, install then launch; duplicate GUI instance guard | Installation replacement exercised locally; single GUI process verified |
+| A12 | Serialized refresh, cooperative subprocess cancellation, bounded stdout, drained stderr, termination handling, initialization handshake | Sleeping subprocess cancellation regression; usage provider checked in installed GUI |
+| A13 | Empty-bucket fallback, finite/range-checked numeric values, bounded percent formatting | Malformed-number and empty-bucket regression plus original parser tests |
+| A14 | Manual languages and absence of Whisper explicitly documented | Documentation review; these are not advertised as implemented features |
+| A15 | Portable behavioral runner plus XCTest wrapper | Twelve regression scenarios and four parser/format tests; full Xcode is absent locally, so the portable runner was used |
+
+No claim of end-to-end voice success is made before physical permission approval
+and a spoken-phrase test. Developer ID signing/notarization and a public remote
+are outside this personal build's current release configuration.
+
 Scope: all application Swift files, scripts, package manifest, permissions,
 installation and existing tests. This is an audit of the current experimental
 implementation, not a declaration that the defects below are fixed.
