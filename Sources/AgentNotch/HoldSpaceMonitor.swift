@@ -111,12 +111,15 @@ final class HoldSpaceMonitor {
         tap = nil; source = nil
     }
 
+    /// Re-sends the current status text, e.g. after the interface language changes.
+    func republishStatus() { publish(isAvailable) }
+
     private func publish(_ available: Bool) {
         isAvailable = available
         onAvailabilityChanged?(available)
-        onStatus?(available ? "Space listo" : AXIsProcessTrusted()
-            ? "Accesibilidad concedida; captura de teclado no disponible. Reintentando…"
-            : "Activa Agent Notch en Ajustes → Privacidad y seguridad → Accesibilidad.")
+        onStatus?(available ? tr("Space ready") : AXIsProcessTrusted()
+            ? tr("Accessibility granted; keyboard capture unavailable. Retrying…")
+            : tr("Enable Agent Notch in Settings → Privacy & Security → Accessibility."))
     }
 
     private func cancelPress() {

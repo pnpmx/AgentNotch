@@ -12,12 +12,12 @@ enum LocalSpeechError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .microphoneDenied: return "Activa el micrófono para Agent Notch en Privacidad y seguridad."
-        case .speechDenied: return "Activa Reconocimiento de voz para Agent Notch."
-        case .unsupportedLocale(let locale): return "SpeechAnalyzer no soporta todavía \(locale)."
-        case .unavailable: return "SpeechAnalyzer no está disponible en este Mac."
-        case .noAudioFormat: return "No se pudo preparar el formato del micrófono."
-        case .alreadyRunning: return "Ya hay una transcripción activa."
+        case .microphoneDenied: return tr("Enable the microphone for Agent Notch in Privacy & Security.")
+        case .speechDenied: return tr("Enable Speech Recognition for Agent Notch.")
+        case .unsupportedLocale(let locale): return tr("SpeechAnalyzer doesn't support %@ yet.", locale)
+        case .unavailable: return tr("SpeechAnalyzer isn't available on this Mac.")
+        case .noAudioFormat: return tr("Couldn't prepare the microphone format.")
+        case .alreadyRunning: return tr("A transcription is already running.")
         }
     }
 }

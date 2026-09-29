@@ -104,15 +104,15 @@ enum UsageFormatting {
     }
 
     static func resetDescription(_ date: Date?, now: Date = Date()) -> String {
-        guard let date else { return "reset desconocido" }
-        if date <= now { return "reset vencido · actualizar" }
+        guard let date else { return tr("reset unknown") }
+        if date <= now { return tr("reset overdue · refresh") }
         let seconds = max(0, Int(date.timeIntervalSince(now)))
-        if seconds < 60 { return "reset <1 min" }
+        if seconds < 60 { return tr("reset <1 min") }
         let minutes = seconds / 60
-        if minutes < 60 { return "reset \(minutes) min" }
+        if minutes < 60 { return tr("reset %d min", minutes) }
         let hours = minutes / 60
         let remainder = minutes % 60
-        if hours < 24 { return remainder == 0 ? "reset \(hours) h" : "reset \(hours) h \(remainder) min" }
-        return "reset \(hours / 24) d \(hours % 24) h"
+        if hours < 24 { return remainder == 0 ? tr("reset %d h", hours) : tr("reset %d h %d min", hours, remainder) }
+        return tr("reset %d d %d h", hours / 24, hours % 24)
     }
 }

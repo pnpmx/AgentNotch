@@ -28,7 +28,7 @@ struct UsageSnapshot: Codable, Equatable, Sendable {
     var isStale: Bool { Date().timeIntervalSince(fetchedAt) > 300 || windows.contains { ($0.resetsAt ?? .distantFuture) < Date() } }
     var ageLabel: String {
         let minutes = max(0, Int(Date().timeIntervalSince(fetchedAt) / 60))
-        return "\(origin ?? source.rawValue) · hace \(minutes) min\(isStale ? " · desactualizado" : "")"
+        return "\(origin ?? source.rawValue) · \(tr("%d min ago", minutes))\(isStale ? " · " + tr("outdated") : "")"
     }
 }
 
@@ -39,9 +39,9 @@ enum UsageParseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .malformedPayload:
-            return "La respuesta no contiene JSON válido."
+            return tr("The response contains no valid JSON.")
         case .missingRateLimits:
-            return "La respuesta no incluye límites de uso."
+            return tr("The response includes no usage limits.")
         }
     }
 }
@@ -55,11 +55,11 @@ enum SpeechState: Equatable {
 
     var shortLabel: String {
         switch self {
-        case .idle: return "Mantén Space"
-        case .preparing: return "Preparando…"
-        case .listening: return "Escuchando…"
-        case .transcribing: return "Transcribiendo…"
-        case .failed: return "Error de voz"
+        case .idle: return tr("Hold Space")
+        case .preparing: return tr("Preparing…")
+        case .listening: return tr("Listening…")
+        case .transcribing: return tr("Transcribing…")
+        case .failed: return tr("Voice error")
         }
     }
 }

@@ -58,7 +58,7 @@ struct NotchView: View {
                     Image(systemName: "chevron.up")
                 }
                 .buttonStyle(.plain)
-                .help("Cerrar")
+                .help(tr("Close"))
             }
             .font(.system(size: 10, weight: .medium, design: .rounded))
 
@@ -93,24 +93,37 @@ struct NotchView: View {
                         Button(locale.name) { model.selectedLocale = locale.id }
                     }
                 } label: {
-                    Label(localeName, systemImage: "globe")
+                    Label(localeName, systemImage: "mic")
                 }
                 .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help(tr("Dictation language"))
+
+                Menu {
+                    ForEach(UILanguage.allCases) { language in
+                        Button(language.nativeName) { model.uiLanguage = language }
+                    }
+                } label: {
+                    Label(model.uiLanguage.resolved.nativeName, systemImage: "globe")
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help(tr("Interface language"))
 
                 Spacer()
 
                 if !model.accessibilityReady {
-                    Button("Activar Space") { model.requestAccessibility() }
+                    Button(tr("Enable Space")) { model.requestAccessibility() }
                         .buttonStyle(.borderedProminent)
                 }
                 if case .failed = model.speechState {
-                    Button("Reintentar") { model.resetSpeechError() }
+                    Button(tr("Retry")) { model.resetSpeechError() }
                 }
                 if !model.liveTranscript.isEmpty {
-                    Button("Copiar") { model.copyTranscript() }
+                    Button(tr("Copy")) { model.copyTranscript() }
                 }
                 if !model.claudeBridgeReady {
-                    Button("Conectar Claude") { model.connectClaude() }
+                    Button(tr("Connect Claude")) { model.connectClaude() }
                         .buttonStyle(.bordered)
                 }
                 Button {
@@ -122,7 +135,7 @@ struct NotchView: View {
             }
 
             if !model.voicePermissionsReady {
-                Button("Conceder permisos de voz") { model.requestVoicePermissions() }
+                Button(tr("Grant voice permissions")) { model.requestVoicePermissions() }
                     .buttonStyle(.bordered)
             }
             if !model.accessibilityReady {
@@ -156,7 +169,7 @@ struct NotchView: View {
                 ForEach(snapshot.windows.prefix(2)) { window in
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
-                            Text(window.label)
+                            Text(window.displayLabel)
                                 .lineLimit(1)
                             Spacer()
                             Text(UsageFormatting.percent(window.usedPercent))
@@ -173,7 +186,7 @@ struct NotchView: View {
                     }
                 }
             } else {
-                Text(error ?? "Cargando…")
+                Text(error ?? tr("Loading…"))
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(3)
@@ -272,7 +285,7 @@ private struct CompactUsageChip: View {
     }
 
     private var value: String {
-        if snapshot?.isStale == true { return "antiguo" }
+        if snapshot?.isStale == true { return tr("stale") }
         return snapshot?.primary.map { UsageFormatting.percent($0.usedPercent) } ?? "--"
     }
 }

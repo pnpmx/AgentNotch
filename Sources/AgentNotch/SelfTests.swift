@@ -6,6 +6,7 @@ enum SelfTests {
             try codexParser()
             try claudeStatusLineParser()
             try claudeDesktopHistoryParser()
+            L10n.current = .es
             guard UsageFormatting.resetDescription(
                 Date(timeIntervalSince1970: 4_900),
                 now: Date(timeIntervalSince1970: 1_000)

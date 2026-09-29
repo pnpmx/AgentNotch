@@ -20,8 +20,10 @@ final class RegressionTests {
             try suite.testEmptyCodexBucketsFallBackAndInvalidNumbers()
         } catch { suite.failures.append("Thrown: \(error)") }
         suite.testStaleSnapshotIsVisibleAsStale()
+        suite.testEveryInterfaceStringIsTranslated()
+        suite.testCachedLabelsFollowInterfaceLanguage()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 12; failures: \(suite.failures.count)")
+        print("Regression scenarios: 14; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -205,7 +207,45 @@ final class RegressionTests {
     func testStaleSnapshotIsVisibleAsStale() {
         let old = UsageSnapshot(source: .claude, windows: [], fetchedAt: Date().addingTimeInterval(-3600), plan: nil)
         XCTAssertTrue(old.isStale)
-        XCTAssertTrue(old.ageLabel.contains("desactualizado"))
+        XCTAssertTrue(old.ageLabel.contains(tr("outdated")))
+    }
+
+    func testEveryInterfaceStringIsTranslated() {
+        let languages = UILanguage.allCases.filter { $0 != .system && $0 != .en }.map(\.rawValue)
+        func specifiers(_ text: String) -> [String] {
+            let regex = try! NSRegularExpression(pattern: "%[@d]")
+            return regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+                .map { String(text[Range($0.range, in: text)!]) }
+        }
+        for (key, translations) in L10n.table {
+            for language in languages {
+                guard let value = translations[language], !value.isEmpty else {
+                    XCTFail("Missing \(language) translation for \"\(key)\""); continue
+                }
+                if specifiers(value) != specifiers(key) {
+                    XCTFail("Format specifiers differ in \(language) for \"\(key)\"")
+                }
+            }
+            if Set(translations.keys) != Set(languages) { XCTFail("Unexpected languages for \"\(key)\"") }
+        }
+    }
+
+    func testCachedLabelsFollowInterfaceLanguage() {
+        let previous = L10n.current
+        defer { L10n.current = previous }
+        // A snapshot cached while the app was Spanish-only.
+        let cached = UsageWindow(id: "claude-five_hour", label: "5 horas", usedPercent: 10, resetsAt: nil, durationMinutes: nil)
+        let weekly = UsageWindow(id: "codex-GPT-secondary", label: "GPT semanal", usedPercent: 10, resetsAt: nil, durationMinutes: 43_200)
+        L10n.current = .en
+        XCTAssertEqual(cached.displayLabel, "5 hours")
+        XCTAssertEqual(weekly.displayLabel, "GPT weekly")
+        XCTAssertEqual(SpeechState.listening.shortLabel, "Listening…")
+        XCTAssertEqual(UsageFormatting.resetDescription(Date(timeIntervalSince1970: 4_900), now: Date(timeIntervalSince1970: 1_000)), "reset 1 h 5 min")
+        L10n.current = .de
+        XCTAssertEqual(cached.displayLabel, "5 Stunden")
+        XCTAssertEqual(UsageFormatting.resetDescription(Date(timeIntervalSince1970: 4_900), now: Date(timeIntervalSince1970: 1_000)), "Reset 1 Std. 5 Min.")
+        L10n.current = .fr
+        XCTAssertEqual(weekly.displayLabel, "GPT hebdo")
     }
 }
 

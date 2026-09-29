@@ -14,12 +14,24 @@ final class AppModel: ObservableObject {
     @Published var liveTranscript = ""
     @Published var isExpanded = false
     @Published var accessibilityReady = false
-    @Published var keyboardStatus = "Comprobando teclado…"
+    @Published var keyboardStatus = tr("Checking keyboard…")
     @Published var voicePermissionsReady = false
     @Published var claudeBridgeReady = false
     @Published var notice: String?
     @Published var selectedLocale: String {
         didSet { UserDefaults.standard.set(selectedLocale, forKey: "speechLocale") }
+    }
+
+    /// Interface language; independent of the dictation locale below.
+    @Published var uiLanguage: UILanguage {
+        didSet {
+            UserDefaults.standard.set(uiLanguage.rawValue, forKey: UILanguage.defaultsKey)
+            L10n.current = uiLanguage.resolved
+            // Stored messages were rendered in the previous language.
+            notice = nil
+            holdSpaceMonitor.republishStatus()
+            Task { await refreshAll() }
+        }
     }
 
     let localeOptions: [(id: String, name: String)] = [
@@ -44,6 +56,8 @@ final class AppModel: ObservableObject {
     init(speechService: (any SpeechServing)? = nil) {
         self.speechService = speechService ?? SpeechService()
         selectedLocale = UserDefaults.standard.string(forKey: "speechLocale") ?? "es-ES"
+        uiLanguage = UILanguage.stored
+        L10n.current = uiLanguage.resolved
         updateVoicePermissions()
     }
 
@@ -128,8 +142,8 @@ final class AppModel: ObservableObject {
             claudeError = nil
         } catch {
             claudeError = claudeBridgeReady
-                ? "Abre Claude Code y envía un mensaje para obtener sus límites."
-                : "Conecta el status line de Claude."
+                ? tr("Open Claude Code and send a message to get its limits.")
+                : tr("Connect Claude's status line.")
         }
     }
 
@@ -137,8 +151,8 @@ final class AppModel: ObservableObject {
         do {
             try ClaudeUsageProvider.installBridge()
             claudeBridgeReady = true
-            claudeError = "Envía un mensaje en Claude Code para cargar el primer dato."
-            notice = "Claude Code conectado."
+            claudeError = tr("Send a message in Claude Code to load the first reading.")
+            notice = tr("Claude Code connected.")
         } catch {
             notice = error.localizedDescription
         }
@@ -156,7 +170,7 @@ final class AppModel: ObservableObject {
         Task {
             let microphone = await AVCaptureDevice.requestAccess(for: .audio)
             guard microphone else {
-                notice = "Activa Agent Notch en Micrófono y vuelve a intentarlo."
+                notice = tr("Enable Agent Notch under Microphone and try again.")
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
                 return
             }
@@ -164,9 +178,9 @@ final class AppModel: ObservableObject {
                 SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0 == .authorized) }
             }
             updateVoicePermissions()
-            if speech { resetSpeechError(); notice = "Permisos de voz concedidos." }
+            if speech { resetSpeechError(); notice = tr("Voice permissions granted.") }
             else {
-                notice = "Activa Agent Notch en Reconocimiento de voz."
+                notice = tr("Enable Agent Notch under Speech Recognition.")
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition")!)
             }
         }
@@ -188,7 +202,7 @@ final class AppModel: ObservableObject {
         targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         liveTranscript = ""
         speechState = .preparing
-        notice = "Preparando voz; la primera vez puede descargar el idioma. Suelta Space para cancelar."
+        notice = tr("Preparing voice; the first time may download the language. Release Space to cancel.")
         speechTask = Task {
             defer { speechTask = nil }
             do {
@@ -196,7 +210,7 @@ final class AppModel: ObservableObject {
                 try Task.checkCancellation()
                 guard speechPressHeld else { await speechService.cancel(); speechState = .idle; return }
                 speechState = .listening
-                notice = "Escuchando; suelta Space para terminar."
+                notice = tr("Listening; release Space to finish.")
             } catch is CancellationError {
                 await speechService.cancel()
                 speechState = .idle
@@ -220,12 +234,12 @@ final class AppModel: ObservableObject {
             liveTranscript = result
             if !result.isEmpty, let targetPID {
                 switch TextInjector.paste(result, into: targetPID) {
-                case .attempted: notice = "Pegado solicitado. Si falta texto, usa Copiar."
-                case .destinationChanged: notice = "Cambió la aplicación. Texto conservado; usa Copiar."
-                case .unavailable: notice = "No se pudo pegar. Texto conservado; usa Copiar."
+                case .attempted: notice = tr("Paste requested. If text is missing, use Copy.")
+                case .destinationChanged: notice = tr("The app changed. Text kept; use Copy.")
+                case .unavailable: notice = tr("Couldn't paste. Text kept; use Copy.")
                 }
             } else {
-                notice = "No se detectó texto. Mantén Space para reintentar."
+                notice = tr("No text detected. Hold Space to retry.")
             }
             speechState = .idle
         } catch {
@@ -241,17 +255,17 @@ final class AppModel: ObservableObject {
         if let task = speechTask { task.cancel(); await task.value }
         await speechService.cancel()
         speechState = .idle
-        notice = "Dictado cancelado."
+        notice = tr("Dictation cancelled.")
     }
 
     func resetSpeechError() {
-        if case .failed = speechState { speechState = .idle; notice = "Mantén Space para reintentar." }
+        if case .failed = speechState { speechState = .idle; notice = tr("Hold Space to retry.") }
     }
 
     func copyTranscript() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(liveTranscript, forType: .string)
-        notice = "Texto copiado."
+        notice = tr("Text copied.")
     }
 
     var keyboardDiagnostics: [String: Any] {

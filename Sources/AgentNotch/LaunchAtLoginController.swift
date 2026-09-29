@@ -68,7 +68,7 @@ enum LaunchAtLoginController {
         )
         try data.write(to: fallbackURL, options: .atomic)
         guard launchctl(["bootstrap", "gui/\(getuid())", fallbackURL.path]) == 0 || isEnabled else {
-            throw NSError(domain: "AgentNotch.Login", code: 1, userInfo: [NSLocalizedDescriptionKey: "No se pudo registrar el inicio automático."])
+            throw NSError(domain: "AgentNotch.Login", code: 1, userInfo: [NSLocalizedDescriptionKey: tr("Couldn't register launch at login.")])
         }
     }
 

@@ -14,7 +14,9 @@ require an installed-app check on each machine.
 
 The maintainer has confirmed dictation and the blinking recording indicator on
 a MacBook Air M2. This is a personal verification, not a compatibility guarantee
-for other hardware or accounts. The current application interface is in Spanish.
+for other hardware or accounts. The interface is available in English, Spanish,
+Italian, French, German and Portuguese; it follows the macOS language unless you
+pick one under **Interface language**.
 
 ## Requirements
 
@@ -75,14 +77,15 @@ A blinking red microphone beside Codex means recording is active, including
 when the panel is collapsed. Orange indicates preparation or transcription;
 the usage ring returns when idle. Reduce Motion uses a steady microphone.
 
-Expand the panel and use **Activar Space** for Accessibility and **Conceder
-permisos de voz** for microphone/speech permission. OS approval must be completed
+Expand the panel and use **Enable Space** for Accessibility and **Grant voice
+permissions** for microphone/speech permission. OS approval must be completed
 by the user. Permission checks run in the GUI process and retry while the app is
-open. Use the menu's **Copiar diagnóstico** to inspect that process's state;
+open. Use the menu's **Copy diagnostics** to inspect that process's state;
 running a separate CLI permission check is not equivalent.
 
-Languages are selected manually: Spanish, English, Italian, French, German and
-Portuguese. Automatic language detection and Whisper fallback are not implemented.
+Dictation languages are selected manually, separately from the interface
+language: Spanish, English, Italian, French, German and Portuguese. Automatic
+language detection and Whisper fallback are not implemented.
 Login launch defaults on for the first personal launch; disabling it from the
 menu is remembered on subsequent launches.
 

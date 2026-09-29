@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- Localize the interface in English, Spanish, Italian, French, German and
+  Portuguese. It follows the macOS language by default; an **Interface
+  language** menu (panel and menu bar) overrides it and applies immediately.
+  Dictation language remains a separate setting.
+- Usage-window labels are derived from stable ids, so snapshots cached in an
+  earlier language render in the current one.
+- Regression suite checks every string has all translations with matching
+  format specifiers.
+
 ## 0.2.1
 
 - Show a small blinking red microphone in the compact panel's Codex wing while

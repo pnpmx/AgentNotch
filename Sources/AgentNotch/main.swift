@@ -69,27 +69,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "waveform.badge.mic", accessibilityDescription: "Agent Notch")
-        let menu = NSMenu()
-        menu.addItem(withTitle: "Mostrar / ocultar notch", action: #selector(togglePanel), keyEquivalent: "n")
-        menu.addItem(withTitle: "Actualizar límites", action: #selector(refreshUsage), keyEquivalent: "r")
-        menu.addItem(withTitle: "Conectar Claude Code", action: #selector(connectClaude), keyEquivalent: "")
-        menu.addItem(withTitle: "Copiar diagnóstico", action: #selector(copyDiagnostics), keyEquivalent: "")
-        accessibilityItem = menu.addItem(withTitle: "Activar Space to Speak", action: #selector(requestAccessibility), keyEquivalent: "")
-        let loginItem = menu.addItem(withTitle: "Abrir al iniciar sesión", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
-        launchAtLoginItem = loginItem
-        updateLaunchAtLoginMenu()
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Salir", action: #selector(quit), keyEquivalent: "q")
-        menu.items.forEach { $0.target = self }
-        item.menu = menu
         statusItem = item
+        model.$uiLanguage
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.rebuildStatusMenu() }
+            .store(in: &cancellables)
         model.$accessibilityReady
             .removeDuplicates()
-            .sink { [weak self] ready in
-                self?.accessibilityItem?.title = ready ? "Space to Speak activo" : "Activar Space to Speak"
-                self?.accessibilityItem?.state = ready ? .on : .off
-            }
+            .sink { [weak self] ready in self?.updateAccessibilityItem(ready: ready) }
             .store(in: &cancellables)
+    }
+
+    /// Rebuilt whenever the interface language changes.
+    private func rebuildStatusMenu() {
+        let menu = NSMenu()
+        menu.addItem(withTitle: tr("Show / hide notch"), action: #selector(togglePanel), keyEquivalent: "n")
+        menu.addItem(withTitle: tr("Refresh limits"), action: #selector(refreshUsage), keyEquivalent: "r")
+        menu.addItem(withTitle: tr("Connect Claude Code"), action: #selector(connectClaude), keyEquivalent: "")
+        menu.addItem(withTitle: tr("Copy diagnostics"), action: #selector(copyDiagnostics), keyEquivalent: "")
+        accessibilityItem = menu.addItem(withTitle: "", action: #selector(requestAccessibility), keyEquivalent: "")
+        launchAtLoginItem = menu.addItem(withTitle: tr("Open at login"), action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+
+        let languageMenu = NSMenu()
+        for language in UILanguage.allCases {
+            let entry = languageMenu.addItem(withTitle: language.nativeName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            entry.representedObject = language.rawValue
+            entry.state = model.uiLanguage == language ? .on : .off
+            entry.target = self
+        }
+        let languageItem = menu.addItem(withTitle: tr("Interface language"), action: nil, keyEquivalent: "")
+        menu.setSubmenu(languageMenu, for: languageItem)
+
+        menu.addItem(.separator())
+        menu.addItem(withTitle: tr("Quit"), action: #selector(quit), keyEquivalent: "q")
+        menu.items.forEach { if $0.action != nil { $0.target = self } }
+        statusItem?.menu = menu
+        updateAccessibilityItem(ready: model.accessibilityReady)
+        updateLaunchAtLoginMenu()
+    }
+
+    private func updateAccessibilityItem(ready: Bool) {
+        accessibilityItem?.title = ready ? tr("Space to Speak active") : tr("Enable Space to Speak")
+        accessibilityItem?.state = ready ? .on : .off
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let language = UILanguage(rawValue: raw) else { return }
+        model.uiLanguage = language
     }
 
     @objc private func togglePanel() { panelController?.toggleVisibility() }
@@ -104,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 try LaunchAtLoginController.enable()
             }
         } catch {
-            model.notice = "Inicio automático: \(error.localizedDescription)"
+            model.notice = tr("Launch at login: %@", error.localizedDescription)
         }
         updateLaunchAtLoginMenu()
     }
@@ -153,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try LaunchAtLoginController.enable()
         } catch {
-            model.notice = "Activa Agent Notch en Ítems de inicio."
+            model.notice = tr("Enable Agent Notch in Login Items.")
         }
         updateLaunchAtLoginMenu()
     }
@@ -161,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateLaunchAtLoginMenu() {
         launchAtLoginItem?.state = LaunchAtLoginController.isEnabled ? .on : .off
         launchAtLoginItem?.toolTip = LaunchAtLoginController.requiresApproval
-            ? "macOS necesita aprobación en Ajustes del Sistema."
+            ? tr("macOS needs approval in System Settings.")
             : nil
     }
 }

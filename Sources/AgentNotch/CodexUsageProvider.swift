@@ -69,11 +69,11 @@ enum CodexUsageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .executableNotFound:
-            return "No encuentro el ejecutable de Codex."
+            return tr("Can't find the Codex executable.")
         case .launchFailed(let message):
-            return "No se pudo iniciar Codex: \(message)"
+            return tr("Couldn't start Codex: %@", message)
         case .timedOut:
-            return "Codex tardó demasiado en responder."
+            return tr("Codex took too long to respond.")
         case .serverError(let message):
             return message
         }
@@ -120,7 +120,7 @@ final class CodexUsageProvider {
             process.terminationHandler = { _ in
                 // Give pending stdout delivery a turn before reporting an early exit.
                 DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
-                    finish(.failure(CodexUsageError.serverError("Codex cerró la conexión.")))
+                    finish(.failure(CodexUsageError.serverError(tr("Codex closed the connection."))))
                 }
             }
 
@@ -129,7 +129,7 @@ final class CodexUsageProvider {
                 guard !chunk.isEmpty else { return }
                 let current = state.append(chunk)
                 guard current.count <= 2 * 1_024 * 1_024 else {
-                    finish(.failure(CodexUsageError.serverError("Respuesta de Codex demasiado grande.")))
+                    finish(.failure(CodexUsageError.serverError(tr("Codex response too large."))))
                     return
                 }
 
@@ -142,7 +142,7 @@ final class CodexUsageProvider {
 
                     if let id = dictionary["id"] as? NSNumber, id.intValue == 1, state.claimInitialization() {
                         if dictionary["error"] != nil {
-                            finish(.failure(CodexUsageError.serverError("Codex rechazó la inicialización.")))
+                            finish(.failure(CodexUsageError.serverError(tr("Codex rejected initialization."))))
                             return
                         }
                         do {
@@ -153,7 +153,7 @@ final class CodexUsageProvider {
                     }
                     if let id = dictionary["id"] as? NSNumber, id.intValue == 2 {
                         if let error = dictionary["error"] as? [String: Any] {
-                            finish(.failure(CodexUsageError.serverError(error["message"] as? String ?? "Codex devolvió un error.")))
+                            finish(.failure(CodexUsageError.serverError(error["message"] as? String ?? tr("Codex returned an error."))))
                         } else {
                             do { finish(.success(try UsageParser.parseCodexResponse(dictionary))) }
                             catch { finish(.failure(error)) }
@@ -169,7 +169,7 @@ final class CodexUsageProvider {
                         "method": "initialize",
                         "id": 1,
                         "params": [
-                            "clientInfo": ["name": "agent_notch", "title": "Agent Notch", "version": "0.2.0"]
+                            "clientInfo": ["name": "agent_notch", "title": "Agent Notch", "version": "0.3.0"]
                         ]
                     ], to: input.fileHandleForWriting)
             } catch {

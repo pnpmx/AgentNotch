@@ -8,11 +8,11 @@ enum ClaudeBridgeError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .executableUnavailable:
-            return "No encuentro el ejecutable instalado de Agent Notch."
+            return tr("Can't find the installed Agent Notch executable.")
         case .existingStatusLine:
-            return "Claude ya tiene un status line. No lo he sobrescrito."
+            return tr("Claude already has a status line. I didn't overwrite it.")
         case .malformedSettings:
-            return "El archivo de ajustes de Claude no contiene JSON válido."
+            return tr("Claude's settings file doesn't contain valid JSON.")
         }
     }
 }
@@ -149,12 +149,12 @@ enum ClaudeBridgeRunner {
             try data.write(to: AppPaths.claudeSnapshot, options: .atomic)
 
             let summary = snapshot.windows.prefix(2).map {
-                "\($0.label): \(UsageFormatting.percent($0.usedPercent))"
+                "\($0.displayLabel): \(UsageFormatting.percent($0.usedPercent))"
             }.joined(separator: " · ")
             FileHandle.standardOutput.write(Data("Claude \(summary)\n".utf8))
             return 0
         } catch UsageParseError.missingRateLimits {
-            FileHandle.standardOutput.write(Data("Claude: límites disponibles después de la primera respuesta\n".utf8))
+            FileHandle.standardOutput.write(Data((tr("Claude: limits available after the first reply") + "\n").utf8))
             return 0
         } catch {
             FileHandle.standardError.write(Data("Agent Notch bridge: \(error.localizedDescription)\n".utf8))
