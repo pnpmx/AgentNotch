@@ -1,6 +1,6 @@
 # Third-party components and references
 
-The current source tree has no vendored libraries, external Swift package
+The native application has no vendored libraries, external Swift package
 dependencies, copied application bundles, language models or image assets.
 It imports Apple system frameworks supplied by the macOS SDK. System frameworks
 are not redistributed or relicensed by this repository.
@@ -17,3 +17,14 @@ reuse must be checked against the upstream license and attributed explicitly.
 
 Whisper is not included or implemented. Its name in earlier planning described
 a possible future integration, not a bundled dependency.
+
+The optional `demo/` video project uses Remotion, React and npm development
+dependencies recorded in `demo/package-lock.json`. These are not linked into
+the native application. Original demo source is MIT; dependencies retain their
+own licenses. In particular, Remotion has separate licensing terms and may
+require a commercial license for some uses. See `demo/README.md` and the license
+files distributed with those packages. The demo's UI is recreated in code with
+sample values; it contains no private screen recordings or third-party media.
+Its instrumental score and UI sounds are synthesized by the included
+`demo/scripts/generate-audio.mjs`; the generator and audio are MIT-licensed
+original project assets, without sampled recordings.

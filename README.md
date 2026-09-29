@@ -106,9 +106,16 @@ frameworks and downloaded speech models are proprietary platform dependencies;
 Codex and Claude are external services under their own terms. MIT applies to
 AgentNotch's code, not those dependencies. See [THIRD_PARTY.md](THIRD_PARTY.md).
 
+## Product demo
+
+An editable 34-second Remotion demo is in [demo/](demo/README.md). It illustrates
+usage limits, push-to-talk and the recording indicator using sample data.
+Run `npm ci` and `npm run dev` inside `demo/` to preview it. This optional video
+toolchain has its own dependency licenses and is not part of the macOS build.
+
 ## Uninstall
 
-Disable **Abrir al iniciar sesión** in the menu, then quit AgentNotch and move
+Disable **Open at login** in the menu, then quit AgentNotch and move
 `~/Applications/AgentNotch.app` to the Trash. If the Claude bridge was configured,
 remove only the AgentNotch `statusLine` entry from `~/.claude/settings.json` (or
 restore the relevant backup after reviewing later changes). Optional usage and
