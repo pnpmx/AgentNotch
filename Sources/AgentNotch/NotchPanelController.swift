@@ -3,9 +3,17 @@ import Combine
 import CoreGraphics
 import SwiftUI
 
+/// Borderless panels never take keyboard input by default. This one does only
+/// while settings are open, so the vocabulary can be typed; as a
+/// non-activating panel it still leaves the frontmost app active.
+final class NotchPanel: NSPanel {
+    var acceptsKeyboard = false
+    override var canBecomeKey: Bool { acceptsKeyboard }
+}
+
 @MainActor
 final class NotchPanelController {
-    private let panel: NSPanel
+    private let panel: NotchPanel
     private let model: AppModel
     private var cancellables: Set<AnyCancellable> = []
     private var hosting: NSHostingView<AnyView>?
@@ -14,7 +22,7 @@ final class NotchPanelController {
 
     init(model: AppModel, show: Bool = true) {
         self.model = model
-        panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = NotchPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.level = .statusBar
@@ -28,6 +36,15 @@ final class NotchPanelController {
         model.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.layout() }
+            .store(in: &cancellables)
+        model.$settingsOpen
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] open in
+                guard let self else { return }
+                self.panel.acceptsKeyboard = open
+                if open { self.panel.makeKey() } else { self.panel.resignKey() }
+            }
             .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: RunLoop.main)

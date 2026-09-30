@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0
+
+- Agent alerts: Claude Code hooks and Codex's notify program report when an
+  agent finishes, needs approval or is waiting; a dot pulses in the notch and
+  the panel lists what happened per project. **Enable agent alerts** installs
+  both, preserving existing hooks and never replacing another notify program.
+- Default model and effort for new Claude Code and Codex sessions from the
+  settings (gear). Codex options come from the models Codex itself lists.
+- Live Claude Code session line: model, effort, cost and context used.
+- Limit alerts at 80% and 95%, a notice when a limit resets, and a pace
+  projection ("at this pace: 100% at 16:40").
+- Dictation: custom vocabulary passed to SpeechAnalyzer as contextual
+  strings, optional Enter after pasting, filler-word removal, and a history
+  of recent dictations.
+- The panel accepts keyboard input only while settings are open.
+
 ## 0.3.0
 
 - Localize the interface in English, Spanish, Italian, French, German and

@@ -86,6 +86,11 @@ enum ClaudeUsageProvider {
         return UsageSnapshot(source: .claude, windows: windows, fetchedAt: latest.0, plan: nil, origin: "Claude Desktop")
     }
 
+    static func loadSession() -> SessionInfo? {
+        guard let data = try? Data(contentsOf: AppPaths.claudeSession) else { return nil }
+        return try? JSONDecoder().decode(SessionInfo.self, from: data)
+    }
+
     static func isBridgeConfigured() -> Bool {
         guard let settings = try? readSettings() else { return false }
         guard let line = settings["statusLine"] as? [String: Any], let command = line["command"] as? String else {
@@ -143,6 +148,10 @@ enum ClaudeBridgeRunner {
         do {
             let input = FileHandle.standardInput.readDataToEndOfFile()
             let object = try JSONSerialization.jsonObject(with: input)
+            // Session details arrive even before the first rate-limit reading.
+            if let session = UsageParser.parseClaudeSession(object), let data = try? JSONEncoder().encode(session) {
+                try? AppPaths.writeAtomically(data, to: AppPaths.claudeSession)
+            }
             let snapshot = try UsageParser.parseClaudeStatusLine(object)
             try FileManager.default.createDirectory(at: AppPaths.supportDirectory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(snapshot)

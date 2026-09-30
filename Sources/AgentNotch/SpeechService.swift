@@ -27,6 +27,8 @@ protocol SpeechServing: AnyObject {
     var onPartialText: ((String) -> Void)? { get set }
     var onFailure: ((Error) -> Void)? { get set }
     var isRunning: Bool { get }
+    /// Names and terms to favour, e.g. project names. Applied at next start.
+    var contextualStrings: [String] { get set }
     func start(localeIdentifier: String) async throws
     func stop() async throws -> String
     func cancel() async
@@ -69,6 +71,7 @@ final class AudioBufferConverter: @unchecked Sendable {
 final class SpeechService: SpeechServing {
     var onPartialText: ((String) -> Void)?
     var onFailure: ((Error) -> Void)?
+    var contextualStrings: [String] = []
 
     private let engine = AVAudioEngine()
     private var analyzer: SpeechAnalyzer?
@@ -116,6 +119,13 @@ final class SpeechService: SpeechServing {
         )
         self.analyzer = analyzer
         try await analyzer.prepareToAnalyze(in: analyzerFormat)
+        if !contextualStrings.isEmpty {
+            // Best effort: modules that support contextual strings bias
+            // recognition towards these spellings.
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = contextualStrings
+            try? await analyzer.setContext(context)
+        }
         try Task.checkCancellation()
         let converter = try AudioBufferConverter(from: inputFormat, to: analyzerFormat)
 

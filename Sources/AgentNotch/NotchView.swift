@@ -35,8 +35,11 @@ struct NotchView: View {
             Color.clear
                 .frame(width: cameraGap, height: 1)
 
-            CompactUsageChip(title: "Claude", color: .orange, snapshot: model.claudeUsage)
-                .frame(maxWidth: .infinity, alignment: .trailing)
+            HStack(spacing: 6) {
+                if model.needsAttention { AttentionDot(urgent: model.agentEvents.last?.kind == .permission) }
+                CompactUsageChip(title: "Claude", color: .orange, snapshot: model.claudeUsage)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .frame(height: cameraHeight)
         .contentShape(Rectangle())
@@ -53,6 +56,15 @@ struct NotchView: View {
                 Text("Space · 280 ms")
                     .foregroundStyle(.white.opacity(0.46))
                 Button {
+                    model.settingsOpen.toggle()
+                    if model.settingsOpen { model.refreshAgentConfigs() }
+                } label: {
+                    Image(systemName: model.settingsOpen ? "gearshape.fill" : "gearshape")
+                }
+                .buttonStyle(.plain)
+                .help(tr("Settings"))
+                Button {
+                    model.settingsOpen = false
                     model.toggleExpanded()
                 } label: {
                     Image(systemName: "chevron.up")
@@ -61,6 +73,8 @@ struct NotchView: View {
                 .help(tr("Close"))
             }
             .font(.system(size: 10, weight: .medium, design: .rounded))
+
+            alertsList
 
             HStack(alignment: .top, spacing: 16) {
                 usageColumn(
@@ -75,6 +89,23 @@ struct NotchView: View {
                     snapshot: model.claudeUsage,
                     error: model.claudeError
                 )
+            }
+
+            if model.history.count > 1 {
+                DisclosureGroup(tr("Recent dictations")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(model.history.dropFirst().enumerated()), id: \.offset) { _, text in
+                            Button { model.copyHistoryItem(text) } label: {
+                                Text(text).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .help(tr("Copy"))
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.75))
             }
 
             if !model.liveTranscript.isEmpty {
@@ -126,6 +157,10 @@ struct NotchView: View {
                     Button(tr("Connect Claude")) { model.connectClaude() }
                         .buttonStyle(.bordered)
                 }
+                if !(model.claudeConfig.hooksInstalled && model.codexConfig.hooksInstalled) {
+                    Button(tr("Enable agent alerts")) { model.connectAgentAlerts() }
+                        .buttonStyle(.bordered)
+                }
                 Button {
                     Task { await model.refreshAll() }
                 } label: {
@@ -142,6 +177,10 @@ struct NotchView: View {
                 Text(model.keyboardStatus)
                     .font(.system(size: 10)).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if model.settingsOpen {
+                SettingsSection(model: model)
             }
 
             if let notice = model.notice {
@@ -162,6 +201,12 @@ struct NotchView: View {
             Text(title)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(color)
+            if title == "Claude Code", let session = model.session {
+                Text(session.line)
+                    .font(.system(size: 9).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+            }
             if let snapshot {
                 Text(snapshot.ageLabel)
                     .font(.system(size: 9))
@@ -183,6 +228,11 @@ struct NotchView: View {
                         Text(UsageFormatting.resetDescription(window.resetsAt))
                             .font(.system(size: 9))
                             .foregroundStyle(.white.opacity(0.52))
+                        if let eta = model.projections[window.id], eta > Date() {
+                            Text(tr("at this pace: 100%% at %@", eta.formatted(date: .omitted, time: .shortened)))
+                                .font(.system(size: 9))
+                                .foregroundStyle(.orange)
+                        }
                     }
                 }
             } else {
@@ -196,6 +246,24 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var alertsList: some View {
+        if !model.limitAlerts.isEmpty || !model.agentEvents.isEmpty {
+            VStack(spacing: 5) {
+                ForEach(model.limitAlerts) { alert in
+                    AlertRow(color: .yellow, title: alert.text, detail: nil, onDismiss: nil)
+                }
+                ForEach(model.agentEvents.suffix(3).reversed()) { event in
+                    AlertRow(
+                        color: event.kind == .permission ? .red : (event.source == "codex" ? .mint : .orange),
+                        title: event.project.isEmpty ? event.title : "\(event.title) · \(event.project)",
+                        detail: event.message.isEmpty ? nil : event.message,
+                        onDismiss: { model.dismissAgentEvent(event) })
+                }
+            }
+        }
     }
 
     private var localeName: String {
@@ -287,5 +355,109 @@ private struct CompactUsageChip: View {
     private var value: String {
         if snapshot?.isStale == true { return tr("stale") }
         return snapshot?.primary.map { UsageFormatting.percent($0.usedPercent) } ?? "--"
+    }
+}
+
+private struct AttentionDot: View {
+    let urgent: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.periodic(from: .distantPast, by: 0.8)) { context in
+            let on = reduceMotion || Int(context.date.timeIntervalSince1970 / 0.8) % 2 == 0
+            Circle()
+                .fill(urgent ? Color.red : Color.orange)
+                .frame(width: 7, height: 7)
+                .opacity(on ? 1 : 0.35)
+        }
+        .accessibilityLabel(tr("Agents"))
+    }
+}
+
+private struct AlertRow: View {
+    let color: Color
+    let title: String
+    let detail: String?
+    let onDismiss: (() -> Void)?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 10, weight: .semibold))
+                if let detail {
+                    Text(detail).font(.system(size: 9)).foregroundStyle(.white.opacity(0.6)).lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if let onDismiss {
+                Button(action: onDismiss) { Image(systemName: "xmark").font(.system(size: 8, weight: .bold)) }
+                    .buttonStyle(.plain)
+                    .help(tr("Dismiss"))
+            }
+        }
+        .padding(7)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct SettingsSection: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Divider().overlay(.white.opacity(0.12))
+            Text(tr("Default model for new sessions")).font(.system(size: 10, weight: .semibold))
+            agentRow(name: "Claude Code", config: model.claudeConfig,
+                     setModel: { model.setClaudeDefaults(model: $0) },
+                     setEffort: { model.setClaudeDefaults(effort: $0) })
+            agentRow(name: "Codex", config: model.codexConfig,
+                     setModel: { model.setCodexDefaults(model: $0) },
+                     setEffort: { model.setCodexDefaults(effort: $0) })
+            Text(tr("Open sessions keep their model; use /model there."))
+                .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5))
+
+            Text(tr("Alerts")).font(.system(size: 10, weight: .semibold)).padding(.top, 2)
+            Toggle(tr("Limit alerts (80%, 95%, reset)"), isOn: $model.limitAlertsEnabled)
+            Toggle(tr("Agent finished / needs approval"), isOn: $model.agentAlertsEnabled)
+
+            Text(tr("Dictation")).font(.system(size: 10, weight: .semibold)).padding(.top, 2)
+            TextField(tr("Names and terms to recognise, separated by commas"), text: $model.vocabulary)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 10))
+            Toggle(tr("Press Enter after pasting"), isOn: $model.autoEnter)
+            Toggle(tr("Remove filler words (um, eh…)"), isOn: $model.removeFillers)
+        }
+        .toggleStyle(.checkbox)
+        .font(.system(size: 10))
+    }
+
+    private func agentRow(name: String, config: AgentConfiguration,
+                          setModel: @escaping (String) -> Void,
+                          setEffort: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 8) {
+            Text(name).frame(width: 74, alignment: .leading).foregroundStyle(.white.opacity(0.7))
+            Menu(modelName(config)) {
+                ForEach(config.models) { option in
+                    Button(option.id.isEmpty ? tr("Default") : option.name) { setModel(option.id) }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            Menu(config.effort.isEmpty ? tr("Effort") + ": " + tr("Default") : tr(AgentEffort.label(config.effort))) {
+                Button(tr("Default")) { setEffort("") }
+                ForEach(config.selectedModel?.efforts ?? [], id: \.self) { effort in
+                    Button(tr(AgentEffort.label(effort))) { setEffort(effort) }
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(config.models.isEmpty)
+        }
+    }
+
+    private func modelName(_ config: AgentConfiguration) -> String {
+        guard !config.model.isEmpty else { return tr("Default") }
+        return config.models.first { $0.id == config.model }?.name ?? config.model
     }
 }

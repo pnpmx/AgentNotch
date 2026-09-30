@@ -25,7 +25,7 @@ enum TextInjector {
     enum Result { case attempted, destinationChanged, unavailable }
     private static var restoring: Task<Void, Never>?
 
-    static func paste(_ text: String, into target: pid_t) -> Result {
+    static func paste(_ text: String, into target: pid_t, pressEnter: Bool = false) -> Result {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == target else { return .destinationChanged }
         guard !text.isEmpty, AXIsProcessTrusted(), restoring == nil,
               let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
@@ -38,6 +38,15 @@ enum TextInjector {
         down.flags = .maskCommand; up.flags = .maskCommand
         // Address the original process; never send the paste to a new frontmost app.
         down.postToPid(target); up.postToPid(target)
+        if pressEnter {
+            // Submit after the paste lands. Return is virtual key 36.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                guard let enterDown = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true),
+                      let enterUp = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: false),
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == target else { return }
+                enterDown.postToPid(target); enterUp.postToPid(target)
+            }
+        }
         restoring = Task {
             try? await Task.sleep(for: .seconds(1))
             previous.restore(to: pasteboard, ifUnchanged: count)

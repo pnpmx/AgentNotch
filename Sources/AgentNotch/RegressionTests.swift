@@ -22,8 +22,12 @@ final class RegressionTests {
         suite.testStaleSnapshotIsVisibleAsStale()
         suite.testEveryInterfaceStringIsTranslated()
         suite.testCachedLabelsFollowInterfaceLanguage()
+        suite.testAgentEventParsing()
+        do { try suite.testAgentConfigEdits() } catch { suite.failures.append("Agent config: \(error)") }
+        suite.testLimitTracker()
+        suite.testFillerRemoval()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 14; failures: \(suite.failures.count)")
+        print("Regression scenarios: 18; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -210,12 +214,93 @@ final class RegressionTests {
         XCTAssertTrue(old.ageLabel.contains(tr("outdated")))
     }
 
+    func testAgentEventParsing() {
+        let stop: [String: Any] = ["hook_event_name": "Stop", "cwd": "/Users/x/my-app/",
+                                   "last_assistant_message": "Fixed   the\ntests."]
+        let event = AgentEvents.fromClaudeHook(stop, at: 5)
+        XCTAssertEqual(event?.kind, .done)
+        XCTAssertEqual(event?.message, "Fixed the tests.")
+        XCTAssertEqual(event?.project, "my-app")
+        XCTAssertNil(AgentEvents.fromClaudeHook(["hook_event_name": "Stop", "agent_id": "sub"], at: 0))
+        let permission: [String: Any] = ["hook_event_name": "Notification", "notification_type": "permission_prompt",
+                                         "message": "Claude wants to run: Bash"]
+        XCTAssertEqual(AgentEvents.fromClaudeHook(permission, at: 0)?.kind, .permission)
+        XCTAssertNil(AgentEvents.fromClaudeHook(["hook_event_name": "Notification", "notification_type": "auth_success"], at: 0))
+        let codex = AgentEvents.fromCodexNotify(#"{"type":"agent-turn-complete","cwd":"/src/web","last-assistant-message":"Done."}"#, at: 1)
+        XCTAssertEqual(codex?.source, "codex")
+        XCTAssertEqual(codex?.project, "web")
+        XCTAssertNil(AgentEvents.fromCodexNotify("nope", at: 1))
+    }
+
+    func testAgentConfigEdits() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agentnotch-cfg-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let settings = directory.appendingPathComponent("settings.json")
+        try Data(#"{"permissions":{"allow":["Bash"]},"hooks":{"Stop":[{"matcher":"*","hooks":[{"type":"command","command":"say done"}]}]}}"#.utf8)
+            .write(to: settings)
+        try AgentConfig.setClaudeDefaults(model: "opus", effort: "xhigh", at: settings)
+        XCTAssertEqual(AgentConfig.claudeConfiguration(at: settings).model, "opus")
+        XCTAssertEqual(AgentConfig.claudeConfiguration(at: settings).effort, "xhigh")
+        try AgentConfig.installClaudeHooks(command: "\"/A/AgentNotch\" --agent-event claude", at: settings)
+        try AgentConfig.installClaudeHooks(command: "\"/A/AgentNotch\" --agent-event claude", at: settings)
+        let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: settings)) as? [String: Any]
+        let stop = (raw?["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]]
+        XCTAssertEqual(stop?.count, 2)
+        XCTAssertEqual(((raw?["permissions"] as? [String: Any])?["allow"] as? [String])?.first, "Bash")
+        XCTAssertTrue(AgentConfig.claudeConfiguration(at: settings).hooksInstalled)
+        do { try AgentConfig.setClaudeDefaults(model: "gpt", effort: nil, at: settings); XCTFail("invalid model accepted") }
+        catch {}
+
+        let toml = "# c\nmodel = \"a\"\n\n[projects.\"/p\"]\nmodel = \"inner\"\n"
+        XCTAssertEqual(AgentConfig.tomlGet(toml, "model"), "a")
+        let set = AgentConfig.tomlSet(toml, "model_reasoning_effort", "\"high\"")
+        XCTAssertTrue(set.contains("model = \"a\"\nmodel_reasoning_effort = \"high\"\n\n[projects"))
+        XCTAssertTrue(AgentConfig.tomlSet(set, "model", nil).contains("model = \"inner\""))
+        XCTAssertNil(AgentConfig.tomlGet(AgentConfig.tomlSet(set, "model", nil), "model"))
+        let notify = try AgentConfig.installingCodexNotify(in: "model = \"m\"\n", executable: "/A/AgentNotch")
+        XCTAssertTrue(notify.contains("notify = ['/A/AgentNotch', '--agent-event', 'codex']"))
+        XCTAssertEqual(try AgentConfig.installingCodexNotify(in: notify, executable: "/A/AgentNotch"), notify)
+        do { _ = try AgentConfig.installingCodexNotify(in: "notify = [\"bash\"]\n", executable: "/A"); XCTFail("replaced notify") }
+        catch {}
+        XCTAssertTrue(AgentConfig.isSafeIdentifier("gpt-6.1-sol"))
+        XCTAssertFalse(AgentConfig.isSafeIdentifier("x\"\nnotify = []"))
+    }
+
+    func testLimitTracker() {
+        func snapshot(_ at: TimeInterval, _ percent: Double, reset: TimeInterval) -> UsageSnapshot {
+            UsageSnapshot(source: .claude, windows: [UsageWindow(id: "claude-five_hour", label: "5 horas", usedPercent: percent,
+                                                               resetsAt: Date(timeIntervalSince1970: reset), durationMinutes: nil)],
+                          fetchedAt: Date(timeIntervalSince1970: at), plan: nil)
+        }
+        var tracker = LimitTracker()
+        XCTAssertTrue(tracker.update(snapshot(0, 50, reset: 100_000)).isEmpty)
+        XCTAssertEqual(tracker.update(snapshot(600, 60, reset: 100_000)).count, 0)
+        XCTAssertEqual(tracker.update(snapshot(1200, 81, reset: 100_000)).count, 1)
+        XCTAssertEqual(tracker.update(snapshot(1500, 85, reset: 100_000)).count, 0)
+        XCTAssertTrue(tracker.projection(for: "claude-five_hour") != nil)
+        let reset = tracker.update(snapshot(1800, 2, reset: 118_000))
+        XCTAssertEqual(reset.count, 1)
+        if case .reset = reset.first {} else { XCTFail("expected reset") }
+        var pace = LimitTracker()
+        for i in 0...3 { _ = pace.update(snapshot(TimeInterval(i * 600), 40 + Double(i) * 10, reset: 100_000)) }
+        XCTAssertEqual(pace.projection(for: "claude-five_hour")?.timeIntervalSince1970, 3600)
+    }
+
+    func testFillerRemoval() {
+        XCTAssertEqual(TranscriptCleanup.removeFillers("Um, fix the, uh, login bug"), "Fix the, login bug")
+        XCTAssertEqual(TranscriptCleanup.removeFillers("the umbrella test"), "The umbrella test")
+        XCTAssertEqual(TranscriptCleanup.removeFillers("este bug es raro"), "Bug es raro")
+    }
+
     func testEveryInterfaceStringIsTranslated() {
         let languages = UILanguage.allCases.filter { $0 != .system && $0 != .en }.map(\.rawValue)
         func specifiers(_ text: String) -> [String] {
-            let regex = try! NSRegularExpression(pattern: "%[@d]")
+            // Positional forms (%2$@) are allowed; compare the argument types.
+            let regex = try! NSRegularExpression(pattern: "%(?:\\d+\\$)?([@d])")
             return regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
-                .map { String(text[Range($0.range, in: text)!]) }
+                .map { String(text[Range($0.range(at: 1), in: text)!]) }
+                .sorted()
         }
         for (key, translations) in L10n.table {
             for language in languages {
@@ -254,6 +339,7 @@ private final class FakeSpeech: SpeechServing {
     var onPartialText: ((String) -> Void)?
     var onFailure: ((Error) -> Void)?
     var isRunning = false
+    var contextualStrings: [String] = []
     var failStart = false
     var failStop = false
     var delay = false

@@ -62,6 +62,20 @@ enum UsageParser {
         return UsageSnapshot(source: .claude, windows: windows, fetchedAt: now, plan: nil, origin: "Claude Code")
     }
 
+    static func parseClaudeSession(_ object: Any, now: Date = Date()) -> SessionInfo? {
+        guard let root = object as? [String: Any], let model = root["model"] as? [String: Any],
+              let name = (model["display_name"] as? String) ?? (model["id"] as? String) else { return nil }
+        let workspace = root["workspace"] as? [String: Any]
+        let directory = (workspace?["project_dir"] as? String) ?? (workspace?["current_dir"] as? String) ?? (root["cwd"] as? String)
+        return SessionInfo(
+            model: name,
+            effort: (root["effort"] as? [String: Any])?["level"] as? String,
+            costUSD: number((root["cost"] as? [String: Any])?["total_cost_usd"]).flatMap { $0 >= 0 ? $0 : nil },
+            contextPercent: number((root["context_window"] as? [String: Any])?["used_percentage"]).map { min(100, max(0, $0)) },
+            project: AgentEvents.projectName(directory),
+            updatedAt: now)
+    }
+
     private static func parseCodexBucket(_ bucket: [String: Any], fallbackName: String) -> [UsageWindow] {
         let name = (bucket["limitName"] as? String) ?? (bucket["limitId"] as? String) ?? fallbackName
         let entries = ["primary", "secondary"]

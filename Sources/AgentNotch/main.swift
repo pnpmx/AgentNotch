@@ -196,6 +196,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 if CommandLine.arguments.contains("--claude-bridge") {
     exit(ClaudeBridgeRunner.run())
 }
+// Agent hooks run this binary briefly; never start the app for them.
+if CommandLine.arguments.contains(AgentEvents.flag) {
+    exit(AgentEvents.run(arguments: CommandLine.arguments))
+}
 if CommandLine.arguments.contains("--regression-test") {
     MainActor.assumeIsolated {
         let app = NSApplication.shared

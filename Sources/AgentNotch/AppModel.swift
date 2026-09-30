@@ -34,6 +34,37 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // Agent activity, limits and session
+    @Published var agentEvents: [AgentEvent] = []
+    @Published var limitAlerts: [LimitAlert] = []
+    @Published var session: SessionInfo?
+    @Published var projections: [String: Date] = [:]
+    @Published var claudeConfig = AgentConfiguration()
+    @Published var codexConfig = AgentConfiguration()
+    @Published var history: [String] = []
+    @Published var settingsOpen = false
+
+    @Published var limitAlertsEnabled: Bool {
+        didSet { UserDefaults.standard.set(limitAlertsEnabled, forKey: "limitAlerts") }
+    }
+    @Published var agentAlertsEnabled: Bool {
+        didSet { UserDefaults.standard.set(agentAlertsEnabled, forKey: "agentAlerts"); reloadAgentEvents() }
+    }
+    @Published var vocabulary: String {
+        didSet { UserDefaults.standard.set(vocabulary, forKey: "vocabulary") }
+    }
+    @Published var autoEnter: Bool {
+        didSet { UserDefaults.standard.set(autoEnter, forKey: "autoEnter") }
+    }
+    @Published var removeFillers: Bool {
+        didSet { UserDefaults.standard.set(removeFillers, forKey: "removeFillers") }
+    }
+
+    private var limitTracker = LimitTracker()
+    private var eventsSeen = Int64(Date().timeIntervalSince1970 * 1000)
+    private var eventsModified: Date?
+    private var eventTimer: Timer?
+
     let localeOptions: [(id: String, name: String)] = [
         ("es-ES", "Español"),
         ("en-US", "English"),
@@ -56,6 +87,12 @@ final class AppModel: ObservableObject {
     init(speechService: (any SpeechServing)? = nil) {
         self.speechService = speechService ?? SpeechService()
         selectedLocale = UserDefaults.standard.string(forKey: "speechLocale") ?? "es-ES"
+        let defaults = UserDefaults.standard
+        limitAlertsEnabled = defaults.object(forKey: "limitAlerts") as? Bool ?? true
+        agentAlertsEnabled = defaults.object(forKey: "agentAlerts") as? Bool ?? true
+        vocabulary = defaults.string(forKey: "vocabulary") ?? ""
+        autoEnter = defaults.bool(forKey: "autoEnter")
+        removeFillers = defaults.object(forKey: "removeFillers") as? Bool ?? true
         uiLanguage = UILanguage.stored
         L10n.current = uiLanguage.resolved
         updateVoicePermissions()
@@ -95,6 +132,11 @@ final class AppModel: ObservableObject {
         accessibilityReady = holdSpaceMonitor.install()
         holdSpaceMonitor.monitorAccessibilityPermission()
         claudeBridgeReady = ClaudeUsageProvider.isBridgeConfigured()
+        refreshAgentConfigs()
+        eventsModified = Self.eventsFileDate()
+        eventTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pollAgentEvents() }
+        }
 
         refreshTask = Task { [weak self] in
             await self?.refreshAll()
@@ -112,6 +154,7 @@ final class AppModel: ObservableObject {
     }
 
     func stop() {
+        eventTimer?.invalidate()
         refreshTask?.cancel()
         holdSpaceMonitor.uninstall()
         speechTask?.cancel()
@@ -129,7 +172,9 @@ final class AppModel: ObservableObject {
         refreshingCodex = true
         defer { refreshingCodex = false }
         do {
-            codexUsage = try await codexProvider.fetch()
+            let snapshot = try await codexProvider.fetch()
+            codexUsage = snapshot
+            trackLimits(snapshot)
             codexError = nil
         } catch {
             codexError = error.localizedDescription
@@ -138,13 +183,91 @@ final class AppModel: ObservableObject {
 
     func refreshCachedClaude() async {
         do {
-            claudeUsage = try ClaudeUsageProvider.load()
+            let snapshot = try ClaudeUsageProvider.load()
+            if snapshot != claudeUsage { trackLimits(snapshot) }
+            claudeUsage = snapshot
             claudeError = nil
         } catch {
             claudeError = claudeBridgeReady
                 ? tr("Open Claude Code and send a message to get its limits.")
                 : tr("Connect Claude's status line.")
         }
+    }
+
+    // MARK: Limits
+
+    private func trackLimits(_ snapshot: UsageSnapshot) {
+        let alerts = limitTracker.update(snapshot)
+        for window in snapshot.windows { projections[window.id] = limitTracker.projection(for: window.id) }
+        guard limitAlertsEnabled else { return }
+        for alert in alerts {
+            limitAlerts.removeAll { $0.id == alert.id }
+            limitAlerts.append(alert)
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(12))
+                self?.limitAlerts.removeAll { $0 == alert }
+            }
+        }
+    }
+
+    // MARK: Agent activity
+
+    private static func eventsFileDate() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: AppPaths.agentEvents.path))?[.modificationDate] as? Date
+    }
+
+    private func pollAgentEvents() {
+        let modified = Self.eventsFileDate()
+        let sessionInfo = ClaudeUsageProvider.loadSession()
+        if sessionInfo != session { session = sessionInfo }
+        guard modified != eventsModified else { return }
+        eventsModified = modified
+        reloadAgentEvents()
+    }
+
+    private func reloadAgentEvents() {
+        let events = agentAlertsEnabled ? AgentEvents.load().filter { $0.at > eventsSeen } : []
+        if events != agentEvents { agentEvents = events }
+    }
+
+    func dismissAgentEvent(_ event: AgentEvent) {
+        eventsSeen = max(eventsSeen, event.at)
+        reloadAgentEvents()
+    }
+
+    var needsAttention: Bool { !agentEvents.isEmpty || !limitAlerts.isEmpty }
+
+    // MARK: Agent configuration
+
+    func refreshAgentConfigs() {
+        claudeConfig = AgentConfig.claudeConfiguration()
+        codexConfig = AgentConfig.codexConfiguration()
+    }
+
+    func setClaudeDefaults(model: String? = nil, effort: String? = nil) {
+        do { try AgentConfig.setClaudeDefaults(model: model, effort: effort) }
+        catch { notice = error.localizedDescription }
+        refreshAgentConfigs()
+    }
+
+    func setCodexDefaults(model: String? = nil, effort: String? = nil) {
+        do { try AgentConfig.setCodexDefaults(model: model, effort: effort) }
+        catch { notice = error.localizedDescription }
+        refreshAgentConfigs()
+    }
+
+    func connectAgentAlerts() {
+        var errors: [String] = []
+        do { try AgentConfig.installClaudeHooks() } catch { errors.append(error.localizedDescription) }
+        do { try AgentConfig.installCodexNotify() } catch { errors.append(error.localizedDescription) }
+        notice = errors.first ?? tr("Agent alerts are on. New Claude Code and Codex sessions will report here.")
+        refreshAgentConfigs()
+    }
+
+    func copyHistoryItem(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        notice = tr("Text copied.")
     }
 
     func connectClaude() {
@@ -206,6 +329,10 @@ final class AppModel: ObservableObject {
         speechTask = Task {
             defer { speechTask = nil }
             do {
+                speechService.contextualStrings = vocabulary
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
                 try await speechService.start(localeIdentifier: selectedLocale)
                 try Task.checkCancellation()
                 guard speechPressHeld else { await speechService.cancel(); speechState = .idle; return }
@@ -230,10 +357,15 @@ final class AppModel: ObservableObject {
         defer { finishingSpeech = false }
         speechState = .transcribing
         do {
-            let result = try await speechService.stop()
+            let raw = try await speechService.stop()
+            let result = removeFillers ? TranscriptCleanup.removeFillers(raw) : raw
             liveTranscript = result
+            if !result.isEmpty {
+                history.insert(result, at: 0)
+                if history.count > 8 { history.removeLast(history.count - 8) }
+            }
             if !result.isEmpty, let targetPID {
-                switch TextInjector.paste(result, into: targetPID) {
+                switch TextInjector.paste(result, into: targetPID, pressEnter: autoEnter) {
                 case .attempted: notice = tr("Paste requested. If text is missing, use Copy.")
                 case .destinationChanged: notice = tr("The app changed. Text kept; use Copy.")
                 case .unavailable: notice = tr("Couldn't paste. Text kept; use Copy.")
