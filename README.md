@@ -37,6 +37,14 @@ No third-party Swift packages or hosted speech API key are needed. Speech uses
 on-device models; initial language downloads require network access. Codex usage
 retrieval may contact services through the authenticated CLI.
 
+## Download
+
+Get **`AgentNotch-mac.dmg`** from the [latest release](https://github.com/pnpmx/AgentNotch/releases/latest),
+open it and drag AgentNotch to Applications (macOS 26+, Apple Silicon).
+Release builds are not notarized yet: the first time, open the app, then go to
+**System Settings → Privacy & Security** and click **Open Anyway**. To avoid
+that step, build it yourself as below.
+
 ## Build and install
 
 From the repository root:

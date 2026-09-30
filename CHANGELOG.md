@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+- Downloadable disk image: each release now includes `AgentNotch-mac.dmg`,
+  built by GitHub Actions. Drag AgentNotch to Applications; no Xcode needed.
+- App icon.
+- Release workflow signs with Developer ID and notarizes automatically when
+  signing secrets are configured; until then builds are ad-hoc signed and
+  macOS asks once to confirm under Privacy & Security.
+
 ## 0.4.0
 
 - Agent alerts: Claude Code hooks and Codex's notify program report when an

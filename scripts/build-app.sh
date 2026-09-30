@@ -13,6 +13,7 @@ swift build -c "$configuration" --arch arm64
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 cp "$build_dir/AgentNotch" "$app_dir/Contents/MacOS/AgentNotch"
 cp "$project_dir/Resources/Info.plist" "$app_dir/Contents/Info.plist"
+cp "$project_dir/Resources/AppIcon.icns" "$app_dir/Contents/Resources/AppIcon.icns"
 chmod +x "$app_dir/Contents/MacOS/AgentNotch"
 codesign --force --deep --sign - \
   --requirements '=designated => identifier "dev.agentnotch.mac"' \
