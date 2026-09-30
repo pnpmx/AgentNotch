@@ -3,17 +3,22 @@
 [![CI](https://github.com/pnpmx/AgentNotch/actions/workflows/ci.yml/badge.svg)](https://github.com/pnpmx/AgentNotch/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Experimental native macOS notch panel for Codex and Claude usage, with local
+Experimental native macOS notch panel for Codex and Claude Code: usage limits,
+alerts when an agent finishes or needs you, default model and effort, and local
 push-to-talk dictation using Apple's SpeechAnalyzer.
 
-**Experimental software.** Version 0.2 addresses the defects in the initial
+Windows and Linux: see [AgentNotch for Windows and Linux](https://github.com/pnpmx/AgentNotch-Windows).
+Website: [agentnotch.vercel.app](https://agentnotch.vercel.app).
+
+**Experimental software.** Version 0.4 adds the agent features below. Version
+0.2 addressed the defects in the initial
 [audit](AUDIT.md). Behavioral regression tests cover window state, keyboard
 lifecycle, voice recovery, audio conversion, clipboard restoration and request
 cancellation. Physical microphone dictation and OS permission approval still
 require an installed-app check on each machine.
 
-The maintainer has confirmed dictation and the blinking recording indicator on
-a MacBook Air M2. This is a personal verification, not a compatibility guarantee
+The maintainer has confirmed dictation, the blinking recording indicator and the
+0.4 agent features on a MacBook Air M2. This is a personal verification, not a compatibility guarantee
 for other hardware or accounts. The interface is available in English, Spanish,
 Italian, French, German and Portuguese; it follows the macOS language unless you
 pick one under **Interface language**.
@@ -63,6 +68,31 @@ scripts/configure-claude.sh
 This changes `~/.claude/settings.json`, saves a backup, and refuses to replace an
 unrelated existing status line. Cached usage shows its source, age and stale
 state, together with refresh errors. Not every account supplies every limit.
+
+## Agents, limits and dictation options (0.4)
+
+Open the panel and use the gear for settings.
+
+- **Agent alerts.** **Enable agent alerts** adds `Stop` and `Notification`
+  hooks to `~/.claude/settings.json` (after a backup, keeping existing hooks)
+  and a `notify` program to `~/.codex/config.toml` (never replacing one you
+  already use). Both run `AgentNotch --agent-event …`, which records when an
+  agent finishes, asks for approval or waits; a dot pulses in the notch and the
+  panel lists the event with its project. Applies to sessions started
+  afterwards.
+- **Default model and effort** for new Claude Code sessions (`model`,
+  `effortLevel`) and Codex sessions (`model`, `model_reasoning_effort`). Codex
+  options come from its own `models_cache.json`. Open sessions keep their model;
+  use `/model` there.
+- **Session line** under Claude Code: model, effort, cost and context used,
+  from the status line.
+- **Limit alerts** at 80% and 95%, a notice on reset, and a pace projection
+  ("at this pace: 100% at 16:40") from recent readings.
+- **Dictation:** a vocabulary of names and terms (passed to SpeechAnalyzer as
+  contextual strings, best effort), optional Enter after pasting, filler-word
+  removal, and a history of recent dictations to copy again.
+
+The panel accepts keyboard input only while settings are open.
 
 ## Interaction and current limitations
 
