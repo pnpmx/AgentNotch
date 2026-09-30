@@ -29,8 +29,9 @@ final class RegressionTests {
         suite.testSessionLifecycle()
         suite.testWeeklyStats()
         suite.testAvailabilityAfterReset()
+        suite.testAgentTextCleanup()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 21; failures: \(suite.failures.count)")
+        print("Regression scenarios: 22; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -102,10 +103,12 @@ final class RegressionTests {
         model.isExpanded = true
         let panel = NotchPanelController(model: model, show: false)
         let initial = panel.frame.height
+        model.speechState = .listening
         model.liveTranscript = "Synthetic transcript for layout regression."
         try? await Task.sleep(for: .milliseconds(120))
         XCTAssertGreaterThan(panel.frame.height, initial)
         model.liveTranscript = ""
+        model.speechState = .idle
         try? await Task.sleep(for: .milliseconds(120))
         XCTAssertEqual(panel.frame.height, initial, accuracy: 1)
     }
@@ -350,6 +353,13 @@ final class RegressionTests {
         XCTAssertTrue(tracker.dueAvailable(now: Date(timeIntervalSince1970: 4_999)).isEmpty)
         XCTAssertEqual(tracker.dueAvailable(now: reset).count, 1)
         XCTAssertTrue(tracker.dueAvailable(now: Date(timeIntervalSince1970: 6_000)).isEmpty)
+    }
+
+    func testAgentTextCleanup() {
+        XCTAssertEqual(AgentText.plain(#"{"summary":"Fixed the RR. HH. flow.","files":[]}"#), "Fixed the RR. HH. flow.")
+        let markdown = "## Result\n\n| Platform | Version |\n|---|---|\n| **Mac** | `v0.5.0` |\n\n\n\n- done"
+        XCTAssertEqual(AgentText.plain(markdown), "Result\n\nPlatform · Version\nMac · v0.5.0\n\n• done")
+        XCTAssertEqual(TaskSummary(costUsd: 0.47, durationSecs: 55, linesAdded: 0, linesRemoved: 0).text, "$0.47 · 55 s")
     }
 
     func testEveryInterfaceStringIsTranslated() {

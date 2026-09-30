@@ -75,14 +75,12 @@ struct NotchView: View {
     }
 
     private var expandedContent: some View {
-        VStack(spacing: 11) {
+        VStack(spacing: 10) {
             Divider().overlay(.white.opacity(0.12))
             HStack(spacing: 7) {
                 SpeechActivityIndicator(state: model.speechState)
                 Text(model.speechState.shortLabel)
                 Spacer()
-                Text("Space · 280 ms")
-                    .foregroundStyle(.white.opacity(0.46))
                 Button {
                     model.settingsOpen.toggle()
                     if model.settingsOpen { model.refreshAgentConfigs() }
@@ -102,45 +100,12 @@ struct NotchView: View {
             }
             .font(.system(size: 10, weight: .medium, design: .rounded))
 
-            alertsList
-
-            if !model.visibleSessions.isEmpty {
-                SessionsList(model: model)
+            ForEach(model.limitAlerts) { alert in
+                AlertRow(color: .yellow, title: alert.text, detail: nil, onDismiss: nil)
             }
 
-            HStack(alignment: .top, spacing: 16) {
-                usageColumn(
-                    title: "Codex",
-                    color: .mint,
-                    snapshot: model.codexUsage,
-                    error: model.codexError
-                )
-                usageColumn(
-                    title: "Claude Code",
-                    color: .orange,
-                    snapshot: model.claudeUsage,
-                    error: model.claudeError
-                )
-            }
-
-            if model.history.count > 1 {
-                DisclosureGroup(tr("Recent dictations")) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(Array(model.history.dropFirst().enumerated()), id: \.offset) { _, text in
-                            Button { model.copyHistoryItem(text) } label: {
-                                Text(text).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .help(tr("Copy"))
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-                .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.75))
-            }
-
-            if !model.liveTranscript.isEmpty {
+            // Live words only while dictating; past dictations live in the Voice tab.
+            if model.speechState == .listening || model.speechState == .transcribing, !model.liveTranscript.isEmpty {
                 Text(model.liveTranscript)
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.white.opacity(0.86))
@@ -150,87 +115,118 @@ struct NotchView: View {
                     .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
             }
 
-            HStack(spacing: 9) {
-                Menu {
-                    ForEach(model.localeOptions, id: \.id) { locale in
-                        Button(locale.name) { model.selectedLocale = locale.id }
-                    }
-                } label: {
-                    Label(localeName, systemImage: "mic")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help(tr("Dictation language"))
-
-                Menu {
-                    ForEach(UILanguage.allCases) { language in
-                        Button(language.nativeName) { model.uiLanguage = language }
-                    }
-                } label: {
-                    Label(model.uiLanguage.resolved.nativeName, systemImage: "globe")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help(tr("Interface language"))
-
-                Spacer()
-
-                if !model.accessibilityReady {
-                    Button(tr("Enable Space")) { model.requestAccessibility() }
-                        .buttonStyle(.borderedProminent)
-                }
-                if case .failed = model.speechState {
-                    Button(tr("Retry")) { model.resetSpeechError() }
-                }
-                if !model.liveTranscript.isEmpty {
-                    Button(tr("Copy")) { model.copyTranscript() }
-                }
-                if !model.claudeBridgeReady {
-                    Button(tr("Connect Claude")) { model.connectClaude() }
-                        .buttonStyle(.bordered)
-                }
-                if !(model.claudeConfig.hooksInstalled && model.codexConfig.hooksInstalled) {
-                    Button(tr("Enable agent alerts")) { model.connectAgentAlerts() }
-                        .buttonStyle(.bordered)
-                }
-                Button(tr("Your week")) { model.showWrapped() }
-                    .buttonStyle(.borderless)
-                Button {
-                    Task { await model.refreshAll() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-            }
-
-            if !model.voicePermissionsReady {
-                Button(tr("Grant voice permissions")) { model.requestVoicePermissions() }
-                    .buttonStyle(.bordered)
-            }
-            if !model.accessibilityReady {
-                Text(model.keyboardStatus)
-                    .font(.system(size: 10)).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
             if model.settingsOpen {
                 SettingsSection(model: model)
+            } else if model.wrapped != nil {
+                WrappedSection(model: model)
+            } else {
+                PanelTabs(model: model)
+                switch model.panelTab {
+                case .sessions: SessionsList(model: model)
+                case .limits: limitsTab
+                case .voice: voiceTab
+                }
             }
 
-            if model.wrapped != nil {
-                WrappedSection(model: model)
-            }
+            setupActions
 
             if let notice = model.notice {
                 Text(notice)
                     .font(.system(size: 10))
                     .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(3)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.top, belowCameraClearance)
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
+    }
+
+    private var limitsTab: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 16) {
+                usageColumn(title: "Codex", color: .mint, snapshot: model.codexUsage, error: model.codexError)
+                usageColumn(title: "Claude Code", color: .orange, snapshot: model.claudeUsage, error: model.claudeError)
+            }
+            HStack {
+                Button(tr("Your week")) { model.showWrapped() }
+                Spacer()
+                Button { Task { await model.refreshAll() } } label: { Image(systemName: "arrow.clockwise") }
+                    .help(tr("Refresh"))
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 10))
+        }
+    }
+
+    private var voiceTab: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if model.history.isEmpty {
+                Text(tr("Hold Space to dictate into any app."))
+                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
+            }
+            ForEach(Array(model.history.prefix(4).enumerated()), id: \.offset) { index, text in
+                Button { model.copyHistoryItem(text) } label: {
+                    Text(text)
+                        .font(.system(size: index == 0 ? 11 : 10))
+                        .foregroundStyle(.white.opacity(index == 0 ? 0.9 : 0.6))
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(index == 0 ? 8 : 0)
+                        .background(index == 0 ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help(tr("Copy"))
+            }
+            HStack(spacing: 9) {
+                Menu {
+                    ForEach(model.localeOptions, id: \.id) { locale in
+                        Button(locale.name) { model.selectedLocale = locale.id }
+                    }
+                } label: { Label(localeName, systemImage: "mic") }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help(tr("Dictation language"))
+                Menu {
+                    ForEach(UILanguage.allCases) { language in
+                        Button(language.nativeName) { model.uiLanguage = language }
+                    }
+                } label: { Label(model.uiLanguage.resolved.nativeName, systemImage: "globe") }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help(tr("Interface language"))
+                Spacer()
+                if case .failed = model.speechState {
+                    Button(tr("Retry")) { model.resetSpeechError() }
+                }
+            }
+            .font(.system(size: 10))
+        }
+    }
+
+    /// Only what still needs doing; nothing when everything is set up.
+    @ViewBuilder
+    private var setupActions: some View {
+        let needsAlerts = !(model.claudeConfig.hooksInstalled && model.codexConfig.hooksInstalled)
+        if !model.accessibilityReady || !model.voicePermissionsReady || !model.claudeBridgeReady || needsAlerts {
+            HStack(spacing: 6) {
+                if !model.accessibilityReady {
+                    Button(tr("Enable Space")) { model.requestAccessibility() }.buttonStyle(.borderedProminent)
+                }
+                if !model.voicePermissionsReady {
+                    Button(tr("Grant voice permissions")) { model.requestVoicePermissions() }
+                }
+                if !model.claudeBridgeReady {
+                    Button(tr("Connect Claude")) { model.connectClaude() }
+                }
+                if needsAlerts {
+                    Button(tr("Enable agent alerts")) { model.connectAgentAlerts() }
+                }
+                Spacer()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .font(.system(size: 10))
+        }
     }
 
     @ViewBuilder
@@ -289,25 +285,6 @@ struct NotchView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var alertsList: some View {
-        if !model.limitAlerts.isEmpty || !model.agentEvents.isEmpty {
-            VStack(spacing: 5) {
-                ForEach(model.limitAlerts) { alert in
-                    AlertRow(color: .yellow, title: alert.text, detail: nil, onDismiss: nil)
-                }
-                ForEach(model.agentEvents.suffix(3).reversed()) { event in
-                    AlertRow(
-                        color: event.kind == .permission ? .red : (event.source == "codex" ? .mint : .orange),
-                        title: event.project.isEmpty ? event.title : "\(event.title) · \(event.project)",
-                        detail: [event.task?.text, event.message].compactMap { $0 }.filter { !$0.isEmpty }
-                            .joined(separator: "\n").nilIfEmpty,
-                        onDismiss: { model.dismissAgentEvent(event) })
-                }
-            }
-        }
     }
 
     /// "47 min" or "2 h 5 min".
@@ -556,14 +533,57 @@ private struct NotchGlow: View {
     }
 }
 
-private struct SessionsList: View {
+private struct PanelTabs: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(tr("Sessions")).font(.system(size: 9, weight: .semibold)).foregroundStyle(.white.opacity(0.5))
-            ForEach(model.visibleSessions) { session in
+        HStack(spacing: 2) {
+            tab(.sessions, tr("Sessions"), badge: model.agentEvents.count)
+            tab(.limits, tr("Limits"), badge: 0)
+            tab(.voice, tr("Voice"), badge: 0)
+        }
+        .padding(2)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func tab(_ value: AppModel.PanelTab, _ title: String, badge: Int) -> some View {
+        Button { model.panelTab = value } label: {
+            HStack(spacing: 4) {
+                Text(title)
+                if badge > 0 {
+                    Text("\(badge)").font(.system(size: 8, weight: .bold))
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(Color.orange, in: Capsule()).foregroundStyle(.black)
+                }
+            }
+            .font(.system(size: 10, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+            .background(model.panelTab == value ? Color.white.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.panelTab == value ? .white : .white.opacity(0.55))
+    }
+}
+
+private struct SessionsList: View {
+    @ObservedObject var model: AppModel
+    @State private var showAll = false
+
+    var body: some View {
+        let sessions = model.orderedSessions
+        VStack(alignment: .leading, spacing: 4) {
+            if sessions.isEmpty {
+                Text(tr("No active sessions. They appear here when Claude Code or Codex are working."))
+                    .font(.system(size: 10)).foregroundStyle(.white.opacity(0.55))
+            }
+            ForEach(showAll ? sessions : Array(sessions.prefix(4))) { session in
                 row(session)
+            }
+            if sessions.count > 4 {
+                Button(showAll ? tr("Show less") : tr("Show all (%d)", sessions.count)) { showAll.toggle() }
+                    .buttonStyle(.plain).font(.system(size: 9)).foregroundStyle(.white.opacity(0.55))
             }
         }
     }
@@ -582,36 +602,43 @@ private struct SessionsList: View {
     @ViewBuilder
     private func row(_ session: AgentSession) -> some View {
         let open = model.openSessionID == session.id
-        VStack(alignment: .leading, spacing: 3) {
+        let unread = model.hasUnreadEvent(session)
+        VStack(alignment: .leading, spacing: 4) {
             Button {
                 model.openSessionID = open ? nil : session.id
+                model.markRead(session)
             } label: {
                 HStack(spacing: 6) {
                     Circle().fill(session.source == "codex" ? Color.mint : Color.orange).frame(width: 6, height: 6)
                     Text(session.project.isEmpty ? session.agentName : session.project)
-                        .font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                    Spacer()
-                    Text([session.agentName, session.model].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                        .font(.system(size: 10, weight: unread ? .bold : .semibold)).lineLimit(1)
+                        .layoutPriority(1)
+                    TimelineView(.periodic(from: .now, by: 5)) { _ in
+                        Text(line(session))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(session.state == .waiting ? Color.orange : .white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    if unread { Circle().fill(Color.orange).frame(width: 5, height: 5) }
+                    Image(systemName: open ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold)).foregroundStyle(.white.opacity(0.35))
                 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            TimelineView(.periodic(from: .now, by: 5)) { _ in
-                Text(line(session))
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(session.state == .waiting ? Color.orange : .white.opacity(0.6))
-                    .lineLimit(1)
-                    .padding(.leading, 12)
-            }
-            if open, !session.lastMessage.isEmpty || !session.lastPrompt.isEmpty {
+            if open {
                 VStack(alignment: .leading, spacing: 6) {
+                    Text([session.agentName, session.model].compactMap { $0 }.joined(separator: " · "))
+                        .font(.system(size: 9)).foregroundStyle(.white.opacity(0.45))
                     if !session.lastMessage.isEmpty {
-                        Text(tr("Last response")).font(.system(size: 9)).foregroundStyle(.white.opacity(0.5))
                         ScrollView {
-                            Text(session.lastMessage).font(.system(size: 10)).textSelection(.enabled)
+                            Text(AgentText.plain(session.lastMessage))
+                                .font(.system(size: 10)).textSelection(.enabled)
+                                .foregroundStyle(.white.opacity(0.85))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .frame(maxHeight: 110)
+                        .frame(maxHeight: 84)
                     }
                     HStack(spacing: 6) {
                         if !session.lastMessage.isEmpty {
@@ -624,14 +651,10 @@ private struct SessionsList: View {
                     .controlSize(.mini)
                 }
                 .padding(.leading, 12)
-                .padding(.top, 2)
             }
         }
-        .padding(7)
-        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(alignment: .leading) {
-            if session.state == .waiting { RoundedRectangle(cornerRadius: 1.5).fill(.orange).frame(width: 3) }
-        }
+        .padding(.horizontal, 7).padding(.vertical, 5)
+        .background(.white.opacity(open ? 0.09 : 0.05), in: RoundedRectangle(cornerRadius: 7))
     }
 }
 

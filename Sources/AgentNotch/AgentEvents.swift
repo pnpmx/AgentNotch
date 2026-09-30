@@ -73,7 +73,7 @@ enum AgentEvents {
         default:
             return nil
         }
-        return AgentEvent(source: "claude", kind: kind, message: shorten(message),
+        return AgentEvent(source: "claude", kind: kind, message: shorten(AgentText.plain(message)),
                           project: projectName(text("cwd")), at: at, sessionID: text("session_id"))
     }
 
@@ -87,7 +87,7 @@ enum AgentEvents {
         default: return nil
         }
         return AgentEvent(source: "codex", kind: kind,
-                          message: shorten(payload["last-assistant-message"] as? String ?? ""),
+                          message: shorten(AgentText.plain(payload["last-assistant-message"] as? String ?? "")),
                           project: projectName(payload["cwd"] as? String), at: at,
                           sessionID: (payload["thread-id"] as? String).map { "codex-\($0)" })
     }

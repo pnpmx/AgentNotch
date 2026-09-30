@@ -216,6 +216,15 @@ enum L10n {
         "%@ %@ limit is available again": ["es": "El límite de %2$@ de %1$@ vuelve a estar disponible", "it": "Il limite %2$@ di %1$@ è di nuovo disponibile", "fr": "La limite %2$@ de %1$@ est de nouveau disponible", "de": "%1$@-Limit %2$@ ist wieder verfügbar", "pt": "O limite de %2$@ do %1$@ está disponível de novo"],
         "Path copied. Paste it with Cmd+V.": ["es": "Ruta copiada. Pégala con Cmd+V.", "it": "Percorso copiato. Incollalo con Cmd+V.", "fr": "Chemin copié. Collez-le avec Cmd+V.", "de": "Pfad kopiert. Mit Cmd+V einfügen.", "pt": "Caminho copiado. Cole com Cmd+V."],
         "Show in Finder": ["es": "Mostrar en Finder", "it": "Mostra nel Finder", "fr": "Afficher dans le Finder", "de": "Im Finder zeigen", "pt": "Mostrar no Finder"],
+
+        // Panel tabs
+        "Limits": ["es": "Límites", "it": "Limiti", "fr": "Limites", "de": "Limits", "pt": "Limites"],
+        "Voice": ["es": "Voz", "it": "Voce", "fr": "Voix", "de": "Sprache", "pt": "Voz"],
+        "Refresh": ["es": "Actualizar", "it": "Aggiorna", "fr": "Actualiser", "de": "Aktualisieren", "pt": "Atualizar"],
+        "Hold Space to dictate into any app.": ["es": "Mantén Space para dictar en cualquier app.", "it": "Tieni premuto Space per dettare in qualsiasi app.", "fr": "Maintenez Space pour dicter dans n’importe quelle app.", "de": "Halte Space, um in jeder App zu diktieren.", "pt": "Segure Space para ditar em qualquer app."],
+        "No active sessions. They appear here when Claude Code or Codex are working.": ["es": "No hay sesiones activas. Aparecen aquí cuando Claude Code o Codex están trabajando.", "it": "Nessuna sessione attiva. Appaiono qui quando Claude Code o Codex lavorano.", "fr": "Aucune session active. Elles apparaissent ici quand Claude Code ou Codex travaillent.", "de": "Keine aktiven Sitzungen. Sie erscheinen hier, wenn Claude Code oder Codex arbeiten.", "pt": "Nenhuma sessão ativa. Elas aparecem aqui quando o Claude Code ou o Codex estão trabalhando."],
+        "Show less": ["es": "Ver menos", "it": "Mostra meno", "fr": "Voir moins", "de": "Weniger anzeigen", "pt": "Ver menos"],
+        "Show all (%d)": ["es": "Ver todas (%d)", "it": "Mostra tutte (%d)", "fr": "Tout voir (%d)", "de": "Alle anzeigen (%d)", "pt": "Ver todas (%d)"],
     ]
 
     static func string(_ key: String, language: UILanguage = L10n.current) -> String {

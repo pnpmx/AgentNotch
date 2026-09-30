@@ -36,7 +36,7 @@ struct TaskSummary: Codable, Equatable, Sendable {
         if durationSecs > 0 {
             parts.append(durationSecs < 60 ? tr("%d s", Int(durationSecs)) : tr("%d min", Int((Double(durationSecs) / 60).rounded())))
         }
-        if linesAdded != nil || linesRemoved != nil { parts.append("+\(linesAdded ?? 0)/−\(linesRemoved ?? 0)") }
+        if (linesAdded ?? 0) > 0 || (linesRemoved ?? 0) > 0 { parts.append("+\(linesAdded ?? 0)/−\(linesRemoved ?? 0)") }
         return parts.joined(separator: " · ")
     }
 }
@@ -385,5 +385,37 @@ enum AgentStats {
         try LockedFile.update(AppPaths.stats, as: Stats.self, default: [:]) { stats in
             record(&stats, date: Date(), source: source, model: model, project: project, task: task)
         }
+    }
+}
+
+/// Turns agent output into short plain text for the panel: pulls the text out
+/// of JSON replies and drops Markdown syntax (tables, emphasis, code marks).
+enum AgentText {
+    static func plain(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("{"), let data = text.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let inner = ["summary", "message", "text", "content", "result"].lazy.compactMap({ object[$0] as? String }).first {
+            text = inner
+        }
+        var lines: [String] = []
+        for rawLine in text.components(separatedBy: .newlines) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            // Table separator rows such as |---|:---:|
+            if !line.isEmpty, line.allSatisfy({ "|-: ".contains($0) }), line.contains("-") { continue }
+            if line.hasPrefix("|") || line.hasSuffix("|") {
+                line = line.trimmingCharacters(in: CharacterSet(charactersIn: "| "))
+                    .components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " · ")
+            }
+            while line.hasPrefix("#") { line.removeFirst() }
+            if line.hasPrefix("> ") { line.removeFirst(2) }
+            if line.hasPrefix("- ") || line.hasPrefix("* ") { line = "• " + line.dropFirst(2) }
+            line = line.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "__", with: "")
+                .replacingOccurrences(of: "`", with: "")
+            lines.append(line.trimmingCharacters(in: .whitespaces))
+        }
+        var result = lines.joined(separator: "\n")
+        while result.contains("\n\n\n") { result = result.replacingOccurrences(of: "\n\n\n", with: "\n\n") }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -42,6 +42,8 @@ final class AppModel: ObservableObject {
     @Published var claudeConfig = AgentConfiguration()
     @Published var codexConfig = AgentConfiguration()
     @Published var history: [String] = []
+    enum PanelTab { case sessions, limits, voice }
+    @Published var panelTab: PanelTab = .limits
     @Published var sessions: [AgentSession] = []
     @Published var openSessionID: String?
     @Published var dropTargeted = false
@@ -271,6 +273,28 @@ final class AppModel: ObservableObject {
         return .idle
     }
 
+    func hasUnreadEvent(_ session: AgentSession) -> Bool {
+        agentEvents.contains { $0.sessionID == session.id }
+    }
+
+    func markRead(_ session: AgentSession) {
+        for event in agentEvents where event.sessionID == session.id { dismissAgentEvent(event) }
+    }
+
+    /// Unread and waiting sessions first, then working, then most recent.
+    var orderedSessions: [AgentSession] {
+        func rank(_ s: AgentSession) -> Int {
+            if s.state == .waiting { return 0 }
+            if hasUnreadEvent(s) { return 1 }
+            if s.state == .working { return 2 }
+            return 3
+        }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        return sessions
+            .filter { $0.state == .working || $0.state == .waiting || hasUnreadEvent($0) || now - $0.updatedAt < 60 * 60 * 1000 }
+            .sorted { (rank($0), -$0.updatedAt) < (rank($1), -$1.updatedAt) }
+    }
+
     var visibleSessions: [AgentSession] {
         let now = Int64(Date().timeIntervalSince1970 * 1000)
         return Array(sessions.filter { $0.state != .idle || now - $0.updatedAt < 60 * 60 * 1000 }.prefix(6))
@@ -402,6 +426,8 @@ final class AppModel: ObservableObject {
 
     func toggleExpanded() {
         isExpanded.toggle()
+        // Open where there is something to see.
+        if isExpanded { panelTab = orderedSessions.isEmpty ? .limits : .sessions }
     }
 
     func beginSpeech() {
