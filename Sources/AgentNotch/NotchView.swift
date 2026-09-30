@@ -604,29 +604,37 @@ private struct SessionsList: View {
         let open = model.openSessionID == session.id
         let unread = model.hasUnreadEvent(session)
         VStack(alignment: .leading, spacing: 4) {
-            Button {
+            HStack(spacing: 6) {
+                Circle().fill(session.source == "codex" ? Color.mint : Color.orange).frame(width: 6, height: 6)
+                Text(session.project.isEmpty ? session.agentName : session.project)
+                    .font(.system(size: 10, weight: unread ? .bold : .semibold)).lineLimit(1)
+                    .layoutPriority(1)
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    Text(line(session))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(session.state == .waiting ? Color.orange : .white.opacity(0.55))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if unread { Circle().fill(Color.orange).frame(width: 5, height: 5) }
+                if session.terminal != nil {
+                    Button { model.jumpToTerminal(session) } label: {
+                        Image(systemName: "arrow.up.forward.app").font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .help(tr("Go to terminal (or double-click)"))
+                }
+                Image(systemName: open ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 7, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+            }
+            .contentShape(Rectangle())
+            // Double-click jumps to the terminal; a single click shows details.
+            .onTapGesture(count: 2) { model.jumpToTerminal(session) }
+            .onTapGesture {
                 model.openSessionID = open ? nil : session.id
                 model.markRead(session)
-            } label: {
-                HStack(spacing: 6) {
-                    Circle().fill(session.source == "codex" ? Color.mint : Color.orange).frame(width: 6, height: 6)
-                    Text(session.project.isEmpty ? session.agentName : session.project)
-                        .font(.system(size: 10, weight: unread ? .bold : .semibold)).lineLimit(1)
-                        .layoutPriority(1)
-                    TimelineView(.periodic(from: .now, by: 5)) { _ in
-                        Text(line(session))
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundStyle(session.state == .waiting ? Color.orange : .white.opacity(0.55))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 4)
-                    if unread { Circle().fill(Color.orange).frame(width: 5, height: 5) }
-                    Image(systemName: open ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 7, weight: .bold)).foregroundStyle(.white.opacity(0.35))
-                }
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             if open {
                 VStack(alignment: .leading, spacing: 6) {
                     Text([session.agentName, session.model].compactMap { $0 }.joined(separator: " · "))

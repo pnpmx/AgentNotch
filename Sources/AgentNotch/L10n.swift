@@ -225,6 +225,12 @@ enum L10n {
         "No active sessions. They appear here when Claude Code or Codex are working.": ["es": "No hay sesiones activas. Aparecen aquí cuando Claude Code o Codex están trabajando.", "it": "Nessuna sessione attiva. Appaiono qui quando Claude Code o Codex lavorano.", "fr": "Aucune session active. Elles apparaissent ici quand Claude Code ou Codex travaillent.", "de": "Keine aktiven Sitzungen. Sie erscheinen hier, wenn Claude Code oder Codex arbeiten.", "pt": "Nenhuma sessão ativa. Elas aparecem aqui quando o Claude Code ou o Codex estão trabalhando."],
         "Show less": ["es": "Ver menos", "it": "Mostra meno", "fr": "Voir moins", "de": "Weniger anzeigen", "pt": "Ver menos"],
         "Show all (%d)": ["es": "Ver todas (%d)", "it": "Mostra tutte (%d)", "fr": "Tout voir (%d)", "de": "Alle anzeigen (%d)", "pt": "Ver todas (%d)"],
+
+        // Jump to terminal
+        "This session's terminal is unknown. It is recorded from the next prompt.": ["es": "No se conoce la terminal de esta sesión. Se registra a partir del siguiente prompt.", "it": "Il terminale di questa sessione non è noto. Viene registrato dal prossimo prompt.", "fr": "Le terminal de cette session est inconnu. Il sera enregistré au prochain prompt.", "de": "Das Terminal dieser Sitzung ist unbekannt. Es wird ab dem nächsten Prompt erfasst.", "pt": "O terminal desta sessão é desconhecido. Ele é registrado a partir do próximo prompt."],
+        "Opened the terminal app; this terminal can't select the exact tab.": ["es": "Se abrió la app de terminal; esta terminal no permite elegir la pestaña exacta.", "it": "App del terminale aperta; questo terminale non permette di scegliere la scheda esatta.", "fr": "App de terminal ouverte ; ce terminal ne permet pas de choisir l’onglet exact.", "de": "Terminal-App geöffnet; dieses Terminal erlaubt keine Auswahl des genauen Tabs.", "pt": "App do terminal aberto; este terminal não permite escolher a aba exata."],
+        "That terminal is no longer open.": ["es": "Esa terminal ya no está abierta.", "it": "Quel terminale non è più aperto.", "fr": "Ce terminal n’est plus ouvert.", "de": "Dieses Terminal ist nicht mehr geöffnet.", "pt": "Esse terminal não está mais aberto."],
+        "Go to terminal (or double-click)": ["es": "Ir a la terminal (o doble clic)", "it": "Vai al terminale (o doppio clic)", "fr": "Aller au terminal (ou double-clic)", "de": "Zum Terminal (oder Doppelklick)", "pt": "Ir para o terminal (ou clique duplo)"],
     ]
 
     static func string(_ key: String, language: UILanguage = L10n.current) -> String {

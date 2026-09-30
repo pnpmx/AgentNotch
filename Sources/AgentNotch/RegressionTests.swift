@@ -30,8 +30,9 @@ final class RegressionTests {
         suite.testWeeklyStats()
         suite.testAvailabilityAfterReset()
         suite.testAgentTextCleanup()
+        suite.testTerminalLocation()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 22; failures: \(suite.failures.count)")
+        print("Regression scenarios: 23; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -360,6 +361,17 @@ final class RegressionTests {
         let markdown = "## Result\n\n| Platform | Version |\n|---|---|\n| **Mac** | `v0.5.0` |\n\n\n\n- done"
         XCTAssertEqual(AgentText.plain(markdown), "Result\n\nPlatform · Version\nMac · v0.5.0\n\n• done")
         XCTAssertEqual(TaskSummary(costUsd: 0.47, durationSecs: 55, linesAdded: 0, linesRemoved: 0).text, "$0.47 · 55 s")
+    }
+
+    func testTerminalLocation() {
+        XCTAssertTrue(TerminalLocator.isValidTTY("/dev/ttys004"))
+        XCTAssertFalse(TerminalLocator.isValidTTY("/dev/ttys004\" then do shell script \"x"))
+        XCTAssertTrue(TerminalLocator.selectTabScript(bundleID: "com.apple.Terminal", tty: "/dev/ttys004")?.contains("\"/dev/ttys004\"") == true)
+        XCTAssertTrue(TerminalLocator.selectTabScript(bundleID: "com.googlecode.iterm2", tty: "/dev/ttys004") != nil)
+        XCTAssertNil(TerminalLocator.selectTabScript(bundleID: "com.mitchellh.ghostty", tty: "/dev/ttys004"))
+        XCTAssertNil(TerminalLocator.selectTabScript(bundleID: "com.apple.Terminal", tty: "bad\""))
+        let location = TerminalLocator.capture(environment: ["__CFBundleIdentifier": "com.apple.Terminal"])
+        XCTAssertEqual(location?.bundleID, "com.apple.Terminal")
     }
 
     func testEveryInterfaceStringIsTranslated() {

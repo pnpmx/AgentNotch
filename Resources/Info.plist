@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>AgentNotch selects the Terminal or iTerm2 tab of an agent session when you ask to jump to it.</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
     <key>CFBundleDevelopmentRegion</key>

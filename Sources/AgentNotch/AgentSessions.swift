@@ -63,6 +63,8 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
     var linesAddedAtStart: Int64?
     var linesRemovedAtStart: Int64?
     var lastTask: TaskSummary?
+    /// Terminal app and tab the session runs in, to jump back to it.
+    var terminal: TerminalLocation?
 
     var agentName: String { source == "codex" ? "Codex" : "Claude" }
 
@@ -110,6 +112,7 @@ struct AgentSession: Codable, Equatable, Identifiable, Sendable {
         linesAddedAtStart = try c.decodeIfPresent(Int64.self, forKey: .linesAddedAtStart)
         linesRemovedAtStart = try c.decodeIfPresent(Int64.self, forKey: .linesRemovedAtStart)
         lastTask = try c.decodeIfPresent(TaskSummary.self, forKey: .lastTask)
+        terminal = try c.decodeIfPresent(TerminalLocation.self, forKey: .terminal)
     }
 }
 

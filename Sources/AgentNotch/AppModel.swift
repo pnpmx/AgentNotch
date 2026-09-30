@@ -231,6 +231,20 @@ final class AppModel: ObservableObject {
         notice = message
     }
 
+    /// Brings the session's terminal tab (or at least its app) to the front.
+    func jumpToTerminal(_ session: AgentSession) {
+        markRead(session)
+        guard let terminal = session.terminal else {
+            notice = tr("This session's terminal is unknown. It is recorded from the next prompt.")
+            return
+        }
+        switch TerminalLocator.jump(to: terminal) {
+        case .tab: notice = nil
+        case .app: notice = tr("Opened the terminal app; this terminal can't select the exact tab.")
+        case .unavailable: notice = tr("That terminal is no longer open.")
+        }
+    }
+
     func handoff(_ session: AgentSession) {
         let other = session.source == "codex" ? "Claude" : "Codex"
         copyToClipboard(session.handoffPrompt, notice: tr("Handoff prompt copied. Paste it in %@.", other))

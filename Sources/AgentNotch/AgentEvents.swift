@@ -115,9 +115,13 @@ enum AgentEvents {
         case "claude":
             let input = FileHandle.standardInput.readDataToEndOfFile()
             guard let payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any] else { return 0 }
+            let terminal = TerminalLocator.capture()
             finished = try? AgentSessions.update { sessions in
                 AgentSessions.prune(&sessions, now: at)
                 let task = AgentSessions.applyClaudeHook(&sessions, payload, now: at)
+                if let terminal, let id = payload["session_id"] as? String, sessions[id] != nil {
+                    sessions[id]?.terminal = terminal
+                }
                 let session = (payload["session_id"] as? String).flatMap { sessions[$0] }
                 return task.flatMap { t in session.map { (t, $0) } }
             } ?? nil
@@ -126,10 +130,12 @@ enum AgentEvents {
             // Codex appends the JSON payload as the final argument.
             let raw = arguments.last ?? ""
             let payload = (raw.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] ?? [:]
+            let terminal = TerminalLocator.capture()
             finished = try? AgentSessions.update { sessions in
                 AgentSessions.prune(&sessions, now: at)
                 let task = AgentSessions.applyCodexNotify(&sessions, payload, now: at)
                 let thread = (payload["thread-id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "codex"
+                if let terminal { sessions["codex-\(thread)"]?.terminal = terminal }
                 return task.flatMap { t in sessions["codex-\(thread)"].map { (t, $0) } }
             } ?? nil
             event = fromCodexNotify(raw, at: at)
