@@ -148,6 +148,11 @@ enum ClaudeBridgeRunner {
         do {
             let input = FileHandle.standardInput.readDataToEndOfFile()
             let object = try JSONSerialization.jsonObject(with: input)
+            // Per-session model, cost and line counts for the sessions panel.
+            if let payload = object as? [String: Any] {
+                let now = Int64(Date().timeIntervalSince1970 * 1000)
+                try? AgentSessions.update { AgentSessions.applyStatusLine(&$0, payload, now: now) }
+            }
             // Session details arrive even before the first rate-limit reading.
             if let session = UsageParser.parseClaudeSession(object), let data = try? JSONEncoder().encode(session) {
                 try? AppPaths.writeAtomically(data, to: AppPaths.claudeSession)

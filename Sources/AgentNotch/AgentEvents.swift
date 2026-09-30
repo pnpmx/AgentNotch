@@ -14,6 +14,14 @@ struct AgentEvent: Codable, Equatable, Identifiable, Sendable {
     let project: String
     /// Unix milliseconds; also the identifier.
     let at: Int64
+    var sessionID: String?
+    /// Cost, duration and lines for a finished task, when known.
+    var task: TaskSummary?
+
+    enum CodingKeys: String, CodingKey {
+        case source, kind, message, project, at, task
+        case sessionID = "sessionId"
+    }
 
     var id: Int64 { at }
     var agentName: String { source == "codex" ? "Codex" : "Claude" }
@@ -66,7 +74,7 @@ enum AgentEvents {
             return nil
         }
         return AgentEvent(source: "claude", kind: kind, message: shorten(message),
-                          project: projectName(text("cwd")), at: at)
+                          project: projectName(text("cwd")), at: at, sessionID: text("session_id"))
     }
 
     static func fromCodexNotify(_ raw: String, at: Int64) -> AgentEvent? {
@@ -80,7 +88,8 @@ enum AgentEvents {
         }
         return AgentEvent(source: "codex", kind: kind,
                           message: shorten(payload["last-assistant-message"] as? String ?? ""),
-                          project: projectName(payload["cwd"] as? String), at: at)
+                          project: projectName(payload["cwd"] as? String), at: at,
+                          sessionID: (payload["thread-id"] as? String).map { "codex-\($0)" })
     }
 
     static func load() -> [AgentEvent] {
@@ -100,18 +109,40 @@ enum AgentEvents {
     static func run(arguments: [String]) -> Int32 {
         guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else { return 0 }
         let at = Int64(Date().timeIntervalSince1970 * 1000)
-        let event: AgentEvent?
+        var event: AgentEvent?
+        var finished: (TaskSummary, AgentSession)?
         switch arguments[index + 1] {
         case "claude":
             let input = FileHandle.standardInput.readDataToEndOfFile()
-            event = (try? JSONSerialization.jsonObject(with: input) as? [String: Any]).flatMap { fromClaudeHook($0, at: at) }
+            guard let payload = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any] else { return 0 }
+            finished = try? AgentSessions.update { sessions in
+                AgentSessions.prune(&sessions, now: at)
+                let task = AgentSessions.applyClaudeHook(&sessions, payload, now: at)
+                let session = (payload["session_id"] as? String).flatMap { sessions[$0] }
+                return task.flatMap { t in session.map { (t, $0) } }
+            } ?? nil
+            event = fromClaudeHook(payload, at: at)
         case "codex":
             // Codex appends the JSON payload as the final argument.
-            event = arguments.last.flatMap { fromCodexNotify($0, at: at) }
+            let raw = arguments.last ?? ""
+            let payload = (raw.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }) as? [String: Any] ?? [:]
+            finished = try? AgentSessions.update { sessions in
+                AgentSessions.prune(&sessions, now: at)
+                let task = AgentSessions.applyCodexNotify(&sessions, payload, now: at)
+                let thread = (payload["thread-id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "codex"
+                return task.flatMap { t in sessions["codex-\(thread)"].map { (t, $0) } }
+            } ?? nil
+            event = fromCodexNotify(raw, at: at)
         default:
-            event = nil
+            break
         }
-        if let event { try? append(event) }
+        if let (task, session) = finished {
+            try? AgentStats.recordNow(source: session.source, model: session.model, project: session.project, task: task)
+        }
+        if var event {
+            if event.kind == .done { event.task = finished?.0 }
+            try? append(event)
+        }
         return 0
     }
 }

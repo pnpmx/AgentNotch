@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+
+- Sessions panel: every Claude Code and Codex session at once, with project,
+  model, state and live activity ("editing auth.ts", "running npm test").
+  Adds `UserPromptSubmit` and `PreToolUse` hooks (press **Enable agent
+  alerts** again to add them); only a short description of each action is
+  kept, never file contents. Parallel hooks write under a file lock.
+- The notch shows the overall state: a moving glow while working, a breathing
+  outline while an agent waits, a flash and a trackpad tap when one finishes.
+- Drop files on the notch to paste their paths where you are typing.
+- Last response of each session with copy, and "Continue in Codex/Claude",
+  which copies a handoff prompt with the project, the request and the progress.
+- Cost per task ($, time, lines added/removed) on finished alerts.
+- Countdown when a limit is nearly used up, and a notice when it is available.
+- One reminder when a session has been waiting for you for three minutes.
+- "Your week": a shareable weekly summary image saved to the Desktop.
+
 ## 0.4.1
 
 - Downloadable disk image: each release now includes `AgentNotch-mac.dmg`,

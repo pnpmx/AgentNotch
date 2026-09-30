@@ -5,11 +5,14 @@ import Foundation
 enum LimitAlert: Equatable, Identifiable {
     case threshold(windowID: String, label: String, source: UsageSource, percent: Int)
     case reset(windowID: String, label: String, source: UsageSource)
+    /// A window that had run out (95%+) is available again at its reset time.
+    case available(windowID: String, label: String, source: UsageSource)
 
     var id: String {
         switch self {
         case let .threshold(windowID, _, _, percent): return "\(windowID)-\(percent)"
         case let .reset(windowID, _, _): return "\(windowID)-reset"
+        case let .available(windowID, _, _): return "\(windowID)-available"
         }
     }
 
@@ -19,6 +22,8 @@ enum LimitAlert: Equatable, Identifiable {
             return tr("%@ %@ limit at %d%%", source.agentName, label, percent)
         case let .reset(_, label, source):
             return tr("%@ %@ limit has reset", source.agentName, label)
+        case let .available(_, label, source):
+            return tr("%@ %@ limit is available again", source.agentName, label)
         }
     }
 }
@@ -36,6 +41,9 @@ struct LimitTracker {
         var samples: [(Date, Double)] = []
         var resetsAt: Date?
         var notified = 0
+        var exhausted = false
+        var label = ""
+        var source: UsageSource = .claude
     }
 
     private var tracks: [String: Track] = [:]
@@ -56,6 +64,9 @@ struct LimitTracker {
                 track = Track()
             }
             track.resetsAt = window.resetsAt
+            track.label = window.displayLabel
+            track.source = snapshot.source
+            if window.usedPercent >= 95 { track.exhausted = true }
             if track.samples.last?.0 != now { track.samples.append((now, window.usedPercent)) }
             track.samples.removeAll { now.timeIntervalSince($0.0) > Self.windowSeconds }
             if let level = Self.thresholds.reversed().first(where: { window.usedPercent >= Double($0) && track.notified < $0 }) {
@@ -63,6 +74,16 @@ struct LimitTracker {
                 alerts.append(.threshold(windowID: window.id, label: window.displayLabel, source: snapshot.source, percent: level))
             }
             tracks[window.id] = track
+        }
+        return alerts
+    }
+
+    /// Exhausted windows whose reset time has passed; each fires once.
+    mutating func dueAvailable(now: Date = Date()) -> [LimitAlert] {
+        var alerts: [LimitAlert] = []
+        for (id, track) in tracks where track.exhausted && (track.resetsAt.map { $0 <= now } ?? false) {
+            tracks[id]?.exhausted = false
+            alerts.append(.available(windowID: id, label: track.label, source: track.source))
         }
         return alerts
     }

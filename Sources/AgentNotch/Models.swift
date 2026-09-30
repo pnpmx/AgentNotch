@@ -112,6 +112,14 @@ enum AppPaths {
         supportDirectory.appendingPathComponent("claude-session.json")
     }
 
+    static var agentSessions: URL {
+        supportDirectory.appendingPathComponent("agent-sessions.json")
+    }
+
+    static var stats: URL {
+        supportDirectory.appendingPathComponent("stats.json")
+    }
+
     static var agentEvents: URL {
         supportDirectory.appendingPathComponent("agent-events.json")
     }

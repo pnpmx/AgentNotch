@@ -42,6 +42,11 @@ final class AppModel: ObservableObject {
     @Published var claudeConfig = AgentConfiguration()
     @Published var codexConfig = AgentConfiguration()
     @Published var history: [String] = []
+    @Published var sessions: [AgentSession] = []
+    @Published var openSessionID: String?
+    @Published var dropTargeted = false
+    @Published var wrapped: WeekSummary?
+    @Published var wrappedSavedURL: URL?
     @Published var settingsOpen = false
 
     @Published var limitAlertsEnabled: Bool {
@@ -64,6 +69,10 @@ final class AppModel: ObservableObject {
     private var eventsSeen = Int64(Date().timeIntervalSince1970 * 1000)
     private var eventsModified: Date?
     private var eventTimer: Timer?
+    private var sessionsModified: Date?
+    private var remindedWaits: Set<String> = []
+    private var knownDone: Set<String> = []
+    private var lastEventKind: [Int64: AgentEvent.Kind] = [:]
 
     let localeOptions: [(id: String, name: String)] = [
         ("es-ES", "Español"),
@@ -200,14 +209,47 @@ final class AppModel: ObservableObject {
         let alerts = limitTracker.update(snapshot)
         for window in snapshot.windows { projections[window.id] = limitTracker.projection(for: window.id) }
         guard limitAlertsEnabled else { return }
-        for alert in alerts {
-            limitAlerts.removeAll { $0.id == alert.id }
-            limitAlerts.append(alert)
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(12))
-                self?.limitAlerts.removeAll { $0 == alert }
-            }
+        alerts.forEach(showLimitAlert)
+    }
+
+    private func showLimitAlert(_ alert: LimitAlert) {
+        limitAlerts.removeAll { $0.id == alert.id }
+        limitAlerts.append(alert)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(12))
+            self?.limitAlerts.removeAll { $0 == alert }
         }
+    }
+
+    // MARK: Sessions, drop, Wrapped
+
+    func copyToClipboard(_ text: String, notice message: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        notice = message
+    }
+
+    func handoff(_ session: AgentSession) {
+        let other = session.source == "codex" ? "Claude" : "Codex"
+        copyToClipboard(session.handoffPrompt, notice: tr("Handoff prompt copied. Paste it in %@.", other))
+    }
+
+    /// Files dropped on the notch are pasted, as paths, into the frontmost app
+    /// (the panel never activates, so that is where you were typing).
+    func pasteDroppedPaths(_ urls: [URL]) {
+        let text = urls.map { $0.path.contains(" ") ? "\"\($0.path)\"" : $0.path }.joined(separator: " ")
+        guard !text.isEmpty else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        if let front, front != getpid(), TextInjector.paste(text, into: front) == .attempted {
+            notice = tr("Path pasted where you were typing.")
+        } else {
+            copyToClipboard(text, notice: tr("Path copied. Paste it with Cmd+V."))
+        }
+    }
+
+    func showWrapped() {
+        wrappedSavedURL = nil
+        wrapped = AgentStats.weekSummary(AgentStats.load(), today: Date())
     }
 
     // MARK: Agent activity
@@ -216,7 +258,50 @@ final class AppModel: ObservableObject {
         (try? FileManager.default.attributesOfItem(atPath: AppPaths.agentEvents.path))?[.modificationDate] as? Date
     }
 
+    private static func sessionsFileDate() -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: AppPaths.agentSessions.path))?[.modificationDate] as? Date
+    }
+
+    /// Overall state for the notch: waiting beats working beats a recent finish.
+    var overallState: AgentSession.State {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        if sessions.contains(where: { $0.state == .waiting }) { return .waiting }
+        if sessions.contains(where: { $0.state == .working && now - $0.updatedAt < 30 * 60 * 1000 }) { return .working }
+        if sessions.contains(where: { $0.state == .done && now - $0.updatedAt < 8000 }) { return .done }
+        return .idle
+    }
+
+    var visibleSessions: [AgentSession] {
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        return Array(sessions.filter { $0.state != .idle || now - $0.updatedAt < 60 * 60 * 1000 }.prefix(6))
+    }
+
+    private func pollSessions() {
+        let modified = Self.sessionsFileDate()
+        if modified != sessionsModified {
+            sessionsModified = modified
+            let loaded = AgentSessions.load().values.sorted { $0.updatedAt > $1.updatedAt }
+            // A light trackpad tap when a session finishes (Force Touch trackpads).
+            let finished = loaded.filter { $0.state == .done }.map { "\($0.id)-\($0.updatedAt)" }
+            if agentAlertsEnabled, !knownDone.isEmpty, finished.contains(where: { !knownDone.contains($0) }) {
+                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            }
+            knownDone = Set(finished)
+            if loaded != sessions { sessions = loaded }
+        }
+        // One reminder per waiting period.
+        guard agentAlertsEnabled else { return }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        for session in sessions where session.state == .waiting && now - session.updatedAt >= 3 * 60 * 1000 {
+            if remindedWaits.insert("\(session.id)-\(session.updatedAt)").inserted {
+                notice = tr("%@ has been waiting for you in %@", session.agentName, session.project.isEmpty ? "?" : session.project)
+            }
+        }
+    }
+
     private func pollAgentEvents() {
+        pollSessions()
+        for alert in limitTracker.dueAvailable() where limitAlertsEnabled { showLimitAlert(alert) }
         let modified = Self.eventsFileDate()
         let sessionInfo = ClaudeUsageProvider.loadSession()
         if sessionInfo != session { session = sessionInfo }

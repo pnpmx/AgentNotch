@@ -102,6 +102,22 @@ Open the panel and use the gear for settings.
 
 The panel accepts keyboard input only while settings are open.
 
+## Sessions, live activity and Wrapped (0.5)
+
+- **Sessions panel** with every Claude Code and Codex session, its project,
+  model, state and what it is doing now (from `UserPromptSubmit` and
+  `PreToolUse` hooks; only short descriptions such as a file name are kept).
+  Open a session for its last response, **Copy response**, and **Continue in
+  Codex/Claude**, which copies a handoff prompt for the other agent.
+- The notch glows while agents work, breathes while one waits for you and
+  flashes with a trackpad tap when one finishes.
+- **Drop files on the notch** to paste their paths where you are typing.
+- Finished alerts show cost, time and lines changed; limits show a countdown
+  near 100% and announce when they are available again.
+- **Your week** renders a shareable summary image (tasks, lines, cost, hours,
+  favourite model, top project, busiest day) to the Desktop. Statistics stay
+  local in `~/Library/Application Support/AgentNotch/stats.json`.
+
 ## Interaction and current limitations
 
 Click the top strip to expand usage details. Hold Space for 280 ms in a supported

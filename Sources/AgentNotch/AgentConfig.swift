@@ -59,15 +59,20 @@ enum AgentConfig {
         try data.write(to: url, options: .atomic)
     }
 
-    static func claudeHooksPresent(_ settings: [String: Any]) -> Bool {
+    /// Prompts and tool calls feed live activity; notifications and stops alerts.
+    static let claudeHookEvents = ["UserPromptSubmit", "PreToolUse", "Notification", "Stop"]
+
+    static func claudeHookPresent(_ settings: [String: Any], _ event: String) -> Bool {
         let hooks = settings["hooks"] as? [String: Any] ?? [:]
-        return ["Stop", "Notification"].allSatisfy { event in
-            (hooks[event] as? [[String: Any]] ?? []).contains { group in
-                (group["hooks"] as? [[String: Any]] ?? []).contains {
-                    ($0["command"] as? String)?.contains(AgentEvents.flag) == true
-                }
+        return (hooks[event] as? [[String: Any]] ?? []).contains { group in
+            (group["hooks"] as? [[String: Any]] ?? []).contains {
+                ($0["command"] as? String)?.contains(AgentEvents.flag) == true
             }
         }
+    }
+
+    static func claudeHooksPresent(_ settings: [String: Any]) -> Bool {
+        claudeHookEvents.allSatisfy { claudeHookPresent(settings, $0) }
     }
 
     static func claudeConfiguration(at url: URL = claudeSettingsURL) -> AgentConfiguration {
@@ -103,7 +108,7 @@ enum AgentConfig {
         }
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
         let hook: [String: Any] = ["type": "command", "command": command, "async": true, "timeout": 10]
-        for event in ["Stop", "Notification"] {
+        for event in claudeHookEvents where !claudeHookPresent(settings, event) {
             var groups = hooks[event] as? [[String: Any]] ?? []
             groups.append(["matcher": "*", "hooks": [hook]])
             hooks[event] = groups

@@ -26,8 +26,11 @@ final class RegressionTests {
         do { try suite.testAgentConfigEdits() } catch { suite.failures.append("Agent config: \(error)") }
         suite.testLimitTracker()
         suite.testFillerRemoval()
+        suite.testSessionLifecycle()
+        suite.testWeeklyStats()
+        suite.testAvailabilityAfterReset()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 18; failures: \(suite.failures.count)")
+        print("Regression scenarios: 21; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -291,6 +294,62 @@ final class RegressionTests {
         XCTAssertEqual(TranscriptCleanup.removeFillers("Um, fix the, uh, login bug"), "Fix the, login bug")
         XCTAssertEqual(TranscriptCleanup.removeFillers("the umbrella test"), "The umbrella test")
         XCTAssertEqual(TranscriptCleanup.removeFillers("este bug es raro"), "Bug es raro")
+    }
+
+    func testSessionLifecycle() {
+        var sessions: AgentSessions.Sessions = [:]
+        AgentSessions.applyStatusLine(&sessions, ["session_id": "s1", "model": ["display_name": "Opus"],
+                                                  "cost": ["total_cost_usd": 1.0, "total_lines_added": 10, "total_lines_removed": 2]], now: 1_000)
+        AgentSessions.prune(&sessions, now: 2_000)
+        XCTAssertEqual(sessions["s1"]?.costUsd, 1.0)
+        AgentSessions.applyClaudeHook(&sessions, ["session_id": "s1", "hook_event_name": "UserPromptSubmit",
+                                                  "prompt": "Add tests", "cwd": "/w/my-app"], now: 2_000)
+        AgentSessions.applyClaudeHook(&sessions, ["session_id": "s1", "hook_event_name": "PreToolUse", "tool_name": "Write",
+                                                  "tool_input": ["file_path": "/w/my-app/auth.ts", "file_text": "SECRET"]], now: 3_000)
+        XCTAssertEqual(sessions["s1"]?.activity, SessionActivity(kind: "edit", detail: "auth.ts"))
+        AgentSessions.applyStatusLine(&sessions, ["session_id": "s1",
+                                                  "cost": ["total_cost_usd": 1.42, "total_lines_added": 166, "total_lines_removed": 25]], now: 4_000)
+        let task = AgentSessions.applyClaudeHook(&sessions, ["session_id": "s1", "hook_event_name": "Stop",
+                                                             "last_assistant_message": "Done."], now: 242_000)
+        XCTAssertEqual(task?.durationSecs, 240)
+        XCTAssertTrue(abs((task?.costUsd ?? 0) - 0.42) < 1e-9)
+        XCTAssertEqual(task?.linesAdded, 156)
+        XCTAssertEqual(sessions["s1"]?.state, .done)
+        XCTAssertEqual(sessions["s1"]?.project, "my-app")
+        XCTAssertTrue(sessions["s1"]?.handoffPrompt.contains("Add tests") == true)
+        XCTAssertNil(AgentSessions.applyClaudeHook(&sessions, ["session_id": "s1", "hook_event_name": "Stop", "agent_id": "x"], now: 1))
+        let long = AgentSessions.activity(tool: "Bash", input: ["command": String(repeating: "x", count: 200)])
+        XCTAssertEqual(long.detail.count, AgentSessions.detailLimit)
+    }
+
+    func testWeeklyStats() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let today = Date(timeIntervalSince1970: 1_790_726_400) // 2026-09-30, a Wednesday
+        var stats: AgentStats.Stats = [:]
+        let task = TaskSummary(costUsd: 0.5, durationSecs: 1800, linesAdded: 100, linesRemoved: 1)
+        AgentStats.record(&stats, date: today, source: "claude", model: "Opus", project: "my-app", task: task, calendar: calendar)
+        AgentStats.record(&stats, date: today, source: "claude", model: "Opus", project: "my-app", task: task, calendar: calendar)
+        AgentStats.record(&stats, date: today.addingTimeInterval(-86_400), source: "codex", model: nil, project: "api",
+                          task: TaskSummary(costUsd: nil, durationSecs: 0), calendar: calendar)
+        let week = AgentStats.weekSummary(stats, today: today, calendar: calendar)
+        XCTAssertEqual(week.tasks, 3)
+        XCTAssertEqual(week.linesAdded, 200)
+        XCTAssertEqual(week.topModel, "Opus")
+        XCTAssertEqual(week.topProject, "my-app")
+        XCTAssertEqual(week.dailyTasks, [0, 0, 0, 0, 0, 1, 2])
+        XCTAssertEqual(week.busyHours, 1.0)
+        XCTAssertEqual(week.to, "2026-09-30")
+    }
+
+    func testAvailabilityAfterReset() {
+        var tracker = LimitTracker()
+        let reset = Date(timeIntervalSince1970: 5_000)
+        _ = tracker.update(UsageSnapshot(source: .claude, windows: [UsageWindow(id: "claude-five_hour", label: "5 horas",
+            usedPercent: 97, resetsAt: reset, durationMinutes: nil)], fetchedAt: Date(timeIntervalSince1970: 0), plan: nil))
+        XCTAssertTrue(tracker.dueAvailable(now: Date(timeIntervalSince1970: 4_999)).isEmpty)
+        XCTAssertEqual(tracker.dueAvailable(now: reset).count, 1)
+        XCTAssertTrue(tracker.dueAvailable(now: Date(timeIntervalSince1970: 6_000)).isEmpty)
     }
 
     func testEveryInterfaceStringIsTranslated() {
