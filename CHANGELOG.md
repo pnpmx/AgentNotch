@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- Compact panel: one tab at a time (**Sessions · Limits · Voice**), opening on
+  Sessions when there is activity. Agent alerts merge into their session row as
+  an unread mark with a badge on the tab; rows are one line with details on
+  demand; at most four sessions show, and ones finished over an hour ago hide.
+- Replies are shown as plain text (Markdown tables and emphasis, and Codex JSON
+  replies, are cleaned). No "+0/−0" for tasks that changed no lines.
+- Setup buttons only appear when something still needs connecting.
+- Live dictation text only appears while dictating; past dictations and the
+  language menus live in the Voice tab.
+
 ## 0.5.0
 
 - Sessions panel: every Claude Code and Codex session at once, with project,

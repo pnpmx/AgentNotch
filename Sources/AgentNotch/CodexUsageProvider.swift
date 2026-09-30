@@ -169,7 +169,7 @@ final class CodexUsageProvider {
                         "method": "initialize",
                         "id": 1,
                         "params": [
-                            "clientInfo": ["name": "agent_notch", "title": "Agent Notch", "version": "0.5.0"]
+                            "clientInfo": ["name": "agent_notch", "title": "Agent Notch", "version": "0.6.0"]
                         ]
                     ], to: input.fileHandleForWriting)
             } catch {
