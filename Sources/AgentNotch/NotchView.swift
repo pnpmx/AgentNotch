@@ -25,7 +25,7 @@ struct NotchView: View {
             UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
                 .fill(.black)
         )
-        .overlay(NotchGlow(state: model.overallState))
+        .overlay(NotchGlow(presence: model.presence, sessions: model.sessions, state: model.overallState))
         .overlay {
             if model.dropTargeted {
                 UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
@@ -502,34 +502,80 @@ private final class URLCollector: @unchecked Sendable {
     var urls: [URL] { lock.lock(); defer { lock.unlock() }; return storage }
 }
 
-/// Ambient state of the notch: shimmer while working, breathing while an
-/// agent waits, a short flash when one finishes.
+/// Ambient light around the notch: one comet per live agent type, orange for
+/// Claude and mint for Codex, orbiting the outline. A comet moves faster while
+/// its agent works and pulses while one waits for you; finishing flashes.
 private struct NotchGlow: View {
+    let presence: AgentPresence
+    let sessions: [AgentSession]
     let state: AgentSession.State
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private struct Comet {
+        let color: Color
+        let working: Bool
+        let waiting: Bool
+    }
+
+    private var comets: [Comet] {
+        var result: [Comet] = []
+        for (source, count, color) in [("claude", presence.claude, Color.orange), ("codex", presence.codex, Color.mint)] {
+            let mine = sessions.filter { $0.source == source }
+            let recent = Int64(Date().timeIntervalSince1970 * 1000) - 30 * 60 * 1000
+            // Codex reports only finished turns, so presence alone keeps it alive.
+            guard count > 0 || mine.contains(where: { $0.state == .working && $0.updatedAt > recent }) else { continue }
+            result.append(Comet(color: color,
+                                working: mine.contains { $0.state == .working && $0.updatedAt > recent },
+                                waiting: mine.contains { $0.state == .waiting }))
+        }
+        return result
+    }
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: state == .idle)) { context in
+        let comets = self.comets
+        let shape = UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: comets.isEmpty && state != .done)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            let shape = UnevenRoundedRectangle(bottomLeadingRadius: 22, bottomTrailingRadius: 22)
-            switch state {
-            case .working where !reduceMotion:
-                let phase = (t.truncatingRemainder(dividingBy: 2.4)) / 2.4
-                shape.strokeBorder(
-                    LinearGradient(colors: [.clear, .mint.opacity(0.7), .clear],
-                                   startPoint: UnitPoint(x: phase * 1.6 - 0.3, y: 0),
-                                   endPoint: UnitPoint(x: phase * 1.6 + 0.1, y: 0)),
-                    lineWidth: 1.5)
-            case .waiting:
-                let pulse = reduceMotion ? 0.6 : 0.35 + 0.35 * (1 + sin(t * 2.6)) / 2
-                shape.strokeBorder(Color.orange.opacity(pulse), lineWidth: 1.5)
-            case .done:
-                shape.strokeBorder(Color.mint.opacity(0.8), lineWidth: 1.5)
-            default:
-                Color.clear
+            ZStack {
+                if state == .done {
+                    shape.strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                }
+                ForEach(Array(comets.enumerated()), id: \.offset) { index, comet in
+                    // Evenly spaced, each at its own speed.
+                    let period = comet.working ? 3.2 : 7.0
+                    let head = reduceMotion
+                        ? Double(index) / Double(max(comets.count, 1))
+                        : (t / period + Double(index) / Double(comets.count)).truncatingRemainder(dividingBy: 1)
+                    let pulse = comet.waiting && !reduceMotion ? 0.55 + 0.45 * (1 + sin(t * 4)) / 2 : 1
+                    CometTrail(shape: shape, head: head, length: comet.working ? 0.16 : 0.1)
+                        .stroke(comet.color.opacity(pulse),
+                                style: StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .shadow(color: comet.color.opacity(0.9 * pulse), radius: 4)
+                }
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// The part of a shape's outline between head − length and head, wrapping
+/// around the start of the path.
+private struct CometTrail<S: Shape>: Shape {
+    let shape: S
+    let head: Double
+    let length: Double
+
+    func path(in rect: CGRect) -> Path {
+        let outline = shape.path(in: rect.insetBy(dx: 1, dy: 1))
+        let tail = head - length
+        var path = Path()
+        if tail >= 0 {
+            path.addPath(outline.trimmedPath(from: tail, to: head))
+        } else {
+            path.addPath(outline.trimmedPath(from: 1 + tail, to: 1))
+            path.addPath(outline.trimmedPath(from: 0, to: head))
+        }
+        return path
     }
 }
 

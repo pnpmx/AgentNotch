@@ -45,6 +45,8 @@ final class AppModel: ObservableObject {
     enum PanelTab { case sessions, limits, voice }
     @Published var panelTab: PanelTab = .limits
     @Published var sessions: [AgentSession] = []
+    @Published var presence = AgentPresence()
+    private var presenceTick = 0
     @Published var openSessionID: String?
     @Published var dropTargeted = false
     @Published var wrapped: WeekSummary?
@@ -339,6 +341,12 @@ final class AppModel: ObservableObject {
 
     private func pollAgentEvents() {
         pollSessions()
+        // Process scan every ~2 s is plenty for the orbit lights.
+        presenceTick += 1
+        if presenceTick % 3 == 1 {
+            let current = AgentPresence.current()
+            if current != presence { presence = current }
+        }
         for alert in limitTracker.dueAvailable() where limitAlertsEnabled { showLimitAlert(alert) }
         let modified = Self.eventsFileDate()
         let sessionInfo = ClaudeUsageProvider.loadSession()

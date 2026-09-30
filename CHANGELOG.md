@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+- Orbiting lights: one comet circles the notch for each live agent type,
+  orange for Claude Code and mint for Codex, detected from running terminal
+  sessions. It speeds up while its agent works and pulses while one waits.
+- Jump to a session's terminal: double-click it (or use its jump button) to
+  select that exact tab in Terminal or iTerm2, or bring other terminals
+  forward. The first use asks for permission to control the terminal.
+- Clicking outside the expanded notch closes it. Fixed clicks being swallowed
+  in the Sessions tab.
+
 ## 0.6.0
 
 - Compact panel: one tab at a time (**Sessions · Limits · Voice**), opening on

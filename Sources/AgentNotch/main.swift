@@ -216,6 +216,11 @@ if CommandLine.arguments.contains("--login-item-status") {
     print(String(describing: SMAppService.mainApp.status))
     exit(0)
 }
+if CommandLine.arguments.contains("--agent-presence") {
+    let presence = AgentPresence.current()
+    print("claude=\(presence.claude) codex=\(presence.codex)")
+    exit(0)
+}
 if CommandLine.arguments.contains("--accessibility-status") {
     print(AXIsProcessTrusted() ? "trusted" : "not-trusted")
     exit(0)

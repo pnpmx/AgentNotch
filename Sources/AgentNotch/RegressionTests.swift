@@ -31,8 +31,9 @@ final class RegressionTests {
         suite.testAvailabilityAfterReset()
         suite.testAgentTextCleanup()
         suite.testTerminalLocation()
+        suite.testAgentPresenceClassification()
         for failure in suite.failures { print("FAIL: \(failure)") }
-        print("Regression scenarios: 23; failures: \(suite.failures.count)")
+        print("Regression scenarios: 24; failures: \(suite.failures.count)")
         return suite.failures.isEmpty ? 0 : 1
     }
 
@@ -372,6 +373,15 @@ final class RegressionTests {
         XCTAssertNil(TerminalLocator.selectTabScript(bundleID: "com.apple.Terminal", tty: "bad\""))
         let location = TerminalLocator.capture(environment: ["__CFBundleIdentifier": "com.apple.Terminal"])
         XCTAssertEqual(location?.bundleID, "com.apple.Terminal")
+    }
+
+    func testAgentPresenceClassification() {
+        XCTAssertEqual(AgentPresence.classify(path: "/Users/a/.local/share/claude/versions/2.1.285"), "claude")
+        XCTAssertNil(AgentPresence.classify(path: "/Applications/Claude.app/Contents/MacOS/Claude"))
+        XCTAssertNil(AgentPresence.classify(path: "/usr/local/bin/node"))
+        XCTAssertEqual(AgentPresence.agent(named: "codex", pid: 0), "codex")
+        XCTAssertNil(AgentPresence.agent(named: "zsh", pid: 0))
+        _ = AgentPresence.current() // Must not crash on a real process table.
     }
 
     func testEveryInterfaceStringIsTranslated() {
