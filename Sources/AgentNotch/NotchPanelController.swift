@@ -17,6 +17,7 @@ final class NotchPanelController {
     private let model: AppModel
     private var cancellables: Set<AnyCancellable> = []
     private var hosting: NSHostingView<AnyView>?
+    private var outsideClickMonitor: Any?
     var frame: NSRect { panel.frame }
     var windowNumber: Int { panel.windowNumber }
 
@@ -46,12 +47,34 @@ final class NotchPanelController {
                 if open { self.panel.makeKey() } else { self.panel.resignKey() }
             }
             .store(in: &cancellables)
+        // Close the expanded notch when the user clicks anywhere else. A
+        // global monitor only sees clicks in other apps, never our own panel.
+        model.$isExpanded
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] expanded in self?.setOutsideClickMonitor(expanded) }
+            .store(in: &cancellables)
         NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.layout() }
             .store(in: &cancellables)
         layout()
         if show { panel.orderFrontRegardless() }
+    }
+
+    private func setOutsideClickMonitor(_ enabled: Bool) {
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
+        }
+        guard enabled else { return }
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.model.isExpanded else { return }
+                self.model.settingsOpen = false
+                self.model.isExpanded = false
+            }
+        }
     }
 
     func toggleVisibility() {
